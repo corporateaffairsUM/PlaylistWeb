@@ -1133,31 +1133,41 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
     }
     ctx.drawImage(templateImg, sx, sy, sw, sh, 0, 0, 1920, 1080);
 
-    // 5. Draw each logo
+    // 5. Draw each logo – FIXED: use a consistent size, ignore stretched entry.width/height
     for (const entry of templateLogos) {
-        // Load logo image from its dataURL
         const logoImg = new Image();
         logoImg.src = entry.dataURL;
         await new Promise((resolve, reject) => {
             logoImg.onload = resolve;
-            logoImg.onerror = () => reject('Failed to load logo image');
+            logoImg.onerror = () => reject('Failed to load logo');
         });
-
-        // Compute pixel position and size on the 1920x1080 canvas
-        const px = (entry.x / 100) * 1920;
-        const py = (entry.y / 100) * 1080;
-        // Scale logo size from container pixels to canvas pixels
-        const scaleX = 1920 / containerW;
-        const scaleY = 1080 / containerH;
-        const w = entry.width * scaleX;
-        const h = entry.height * scaleY;
-
-        // Center the logo at the calculated position (top-left corner)
-        const left = px - w / 2;
-        const top = py - h / 2;
-
-        // Draw the logo
-        ctx.drawImage(logoImg, left, top, w, h);
+    
+        // Get natural dimensions
+        const imgW = logoImg.naturalWidth || logoImg.width;
+        const imgH = logoImg.naturalHeight || logoImg.height;
+        const imgAspect = imgW / imgH;
+    
+        // Calculate position on canvas (center of the logo)
+        const centerX = (entry.x / 100) * 1920;
+        const centerY = (entry.y / 100) * 1080;
+    
+        // Fixed size: use a percentage of the canvas width (e.g., 5% of 1920 = 96px)
+        // This keeps all logos the same size regardless of how they were resized in the editor.
+        const fixedSize = 1920 * 0.06; // 6% of canvas width – adjust this number to your liking
+        let drawW, drawH;
+        if (imgAspect > 1) {
+            drawW = fixedSize;
+            drawH = fixedSize / imgAspect;
+        } else {
+            drawH = fixedSize;
+            drawW = fixedSize * imgAspect;
+        }
+    
+        // Center the logo at the position
+        const left = centerX - drawW / 2;
+        const top = centerY - drawH / 2;
+    
+        ctx.drawImage(logoImg, left, top, drawW, drawH);
     }
 
     // 6. Export as PNG and add to slides
