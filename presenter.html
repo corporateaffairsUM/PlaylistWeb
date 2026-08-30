@@ -6,10 +6,11 @@
     <title>SUKIPT 2026 - Presenter Cockpit</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏃</text></svg>" />
     <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@400;600;700&display=swap" rel="stylesheet">
-    <!-- html2canvas for capturing the template -->
+    <!-- html2canvas -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
-        /* ====== ALL ORIGINAL STYLES ====== */
+        /* ====== ALL ORIGINAL STYLES (unchanged) ====== */
+        /* ... (same as before – copy from the previous version) ... */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
             --um-blue: #0033a0; --um-blue-light: #0066cc;
@@ -280,7 +281,7 @@
         }
         .logo-panel {
             flex: 1; min-width: 200px; background: #f8fafc; border-radius: 16px;
-            padding: 16px; border: 1px solid #e2e8f0; max-height: 400px; overflow-y: auto;
+            padding: 16px; border: 1px solid #e2e8f0; max-height: 500px; overflow-y: auto;
         }
         .logo-panel h4 { font-family:'Oswald',sans-serif; margin-bottom: 10px; color: #1e293b; }
         .logo-grid {
@@ -302,22 +303,19 @@
             position: relative; width: 100%; aspect-ratio: 16/9;
             background: white; border: 2px solid #94a3b8; border-radius: 8px;
             overflow: hidden; margin-bottom: 12px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-color: white;
         }
-        .flag-placeholder {
-            position: absolute; border: 2px dashed #94a3b8; border-radius: 8px;
-            display: flex; align-items: center; justify-content: center;
-            font-family: 'Oswald', sans-serif; color: #94a3b8; font-size: 0.9rem;
-            background: rgba(255,255,255,0.5);
-        }
-        .flag-placeholder:nth-child(1) { top: 10%; left: 5%; width: 28%; height: 70%; }
-        .flag-placeholder:nth-child(2) { top: 10%; left: 36%; width: 28%; height: 70%; }
-        .flag-placeholder:nth-child(3) { top: 10%; left: 67%; width: 28%; height: 70%; }
+        /* No flag placeholders anymore – background is the template image */
         .template-logo {
             position: absolute; cursor: grab; user-select: none;
             width: 60px; height: 60px; border: 2px solid var(--um-blue);
             border-radius: 8px; background: white; padding: 4px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             display: flex; align-items: center; justify-content: center;
+            z-index: 10;
         }
         .template-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
         .template-logo.dragging { cursor: grabbing; opacity: 0.8; }
@@ -326,7 +324,6 @@
         }
         .editor-buttons .btn { flex: 0 1 auto; }
 
-        /* Always-visible progress & controls */
         .fixed-controls {
             margin-top: 20px;
         }
@@ -345,7 +342,6 @@
             .template-wrapper { min-width: 100%; }
             .logo-panel { min-width: 100%; }
             .logo-item { width: 50px; height: 50px; }
-            .flag-placeholder { font-size:0.7rem; }
         }
         @media (max-width:450px) {
             .btn-grid { gap:8px; }
@@ -443,29 +439,22 @@
         <!-- Slide Editor -->
         <div class="section">
             <div class="section-title editor-title">🖌️ Slide Editor</div>
-            <div class="section-sub">Build a custom slide with university logos on 3 flags.</div>
+            <div class="section-sub">Build a custom slide by placing university logos on the template.</div>
 
             <div class="editor-layout">
                 <!-- Left: Logo Selection -->
                 <div class="logo-panel">
-                    <h4>📋 University Logos</h4>
-                    <div class="upload-zone" style="padding:12px; margin-bottom:12px;">
-                        <input type="file" id="logoFileInput" multiple accept="image/*" />
-                        <span style="font-size:1.2rem;">🔼</span>
-                        <div class="upload-zone-text" style="font-size:0.8rem;">Upload logos (PNG/SVG)</div>
-                    </div>
+                    <h4>📋 University Logos (64)</h4>
                     <div class="logo-grid" id="logoGrid">
-                        <div style="color:#94a3b8; font-size:0.8rem; width:100%; text-align:center;">Upload logos to begin</div>
+                        <!-- Populated by JavaScript -->
+                        <div style="color:#94a3b8; font-size:0.8rem; width:100%; text-align:center;">Loading logos...</div>
                     </div>
                 </div>
 
                 <!-- Right: Template -->
                 <div class="template-wrapper">
                     <div class="template-container" id="templateContainer">
-                        <!-- Flag placeholders -->
-                        <div class="flag-placeholder">🇲🇾 Flag 1</div>
-                        <div class="flag-placeholder">🇲🇾 Flag 2</div>
-                        <div class="flag-placeholder">🇲🇾 Flag 3</div>
+                        <!-- Template background is set via CSS background-image -->
                         <!-- Logos will be added here dynamically -->
                     </div>
                     <div class="editor-buttons">
@@ -503,7 +492,7 @@
 
 <script>
 // ============================================================
-// 1. DEFINE SONG LISTS (identical to public side)
+// 1. DEFINE SONG LISTS & LOGO LIST
 // ============================================================
 const FLAG_SONG = './music/Lagu Universiti/LAGU SUKIPT.mp3';
 const HOUSE_SONGS = [
@@ -538,8 +527,28 @@ const CONTINGENT_SONGS = [
     './music/Lagu Universiti/UTP.mp3','./music/Lagu Universiti/UUM.mp3'
 ];
 
+// 64 logos as given
+const LOGO_FILES = [
+    'alam.png', 'APU.png', 'City University.png', 'gmiLogo.png',
+    'HELP.png', 'HeriotWattLogo.png', 'IIUM-UIA.png', 'IMU.png',
+    'INTI SUBANG.png', 'INTI.png', 'KL UNI.png', 'KolejKomuniti.png',
+    'KPJ.png', 'KPM.png', 'KPTM.png', 'LSBF.png',
+    'MAHSA.png', 'Manipal.png', 'MMU.png', 'MONASH.png',
+    'MSU.png', 'Newton.png', 'Nottingham.png', 'POLITEKNIK.png',
+    'SultanAzlanShah.png', 'Sunway.png', 'TARUMT.png', "Taylor's.png",
+    'Tesdec.png', 'UCAM.png', 'UCSI.png', 'UCTATI.png',
+    'UIS.png', 'UITM.png', 'UKM.png', 'UM.png',
+    'UMK.png', 'UMPSA.png', 'UMS.png', 'UMT.png',
+    'UM-Wales.png', 'UniKL.png', 'Unikop.png', 'UNIMAP.png',
+    'UNIMAS.png', 'UNIRAZAK.png', 'Unisel.png', 'Unisza.png',
+    'Unitar.png', 'UNITEN.png', 'UOW.png', 'UPM.png',
+    'UPNM.png', 'UPSI.png', 'UPTM.png', 'USIM.png',
+    'USM.png', 'UTAR.png', 'UTEM.png', 'UTHM.png',
+    'UTM.png', 'UTP.png', 'UUM.png', 'Xiamen.png'
+];
+
 // ============================================================
-// 2. FILE CHECKER – runs on load
+// 2. FILE CHECKER – songs AND logos
 // ============================================================
 async function checkFileExists(url) {
     try {
@@ -550,23 +559,26 @@ async function checkFileExists(url) {
     }
 }
 
-async function checkAllSongs() {
+async function checkAllFiles() {
     const allSongs = [FLAG_SONG, ...HOUSE_SONGS, ...CONTINGENT_SONGS];
-    const results = await Promise.all(allSongs.map(async (url) => {
+    const allLogos = LOGO_FILES.map(f => `LogoIPT/${f}`);
+    const allFiles = [...allSongs, ...allLogos];
+
+    const results = await Promise.all(allFiles.map(async (url) => {
         const exists = await checkFileExists(url);
         return { url, exists };
     }));
+
     const missing = results.filter(r => !r.exists);
     if (missing.length) {
-        console.warn('❌ Missing song files:');
+        console.warn('❌ Missing files:');
         missing.forEach(m => console.warn('  -', m.url));
-        // Show a small toast in UI
         const status = document.getElementById('status');
-        status.textContent = `⚠️ ${missing.length} song file(s) missing. Check console.`;
+        status.textContent = `⚠️ ${missing.length} file(s) missing. Check console.`;
         status.style.opacity = '1';
         setTimeout(() => { status.style.opacity = '0.5'; }, 8000);
     } else {
-        console.log('✅ All song files found.');
+        console.log('✅ All song and logo files found.');
     }
 }
 
@@ -651,12 +663,10 @@ function formatTime(seconds) {
 // 7. BUTTON EVENTS (send commands)
 // ============================================================
 
-// --- Flag ---
 document.getElementById('flagBtn').addEventListener('click', () => {
     sendCommand({ action: 'toggleFlag' });
 });
 
-// --- House grid ---
 const houseGrid = document.getElementById('houseGrid');
 HOUSE_SONGS.forEach((path, index) => {
     const btn = document.createElement('button');
@@ -670,30 +680,25 @@ HOUSE_SONGS.forEach((path, index) => {
     houseGrid.appendChild(btn);
 });
 
-// --- Resume House ---
 document.getElementById('resumeHouseBtn').addEventListener('click', () => {
     sendCommand({ action: 'resumeHouse' });
 });
 
-// --- Stop All ---
 document.getElementById('stopAllBtn').addEventListener('click', () => {
     sendCommand({ action: 'stopAll' });
 });
 
-// --- Volume ---
 volumeSlider.addEventListener('input', (e) => {
     const val = parseFloat(e.target.value) / 100;
     volDisplay.textContent = Math.round(e.target.value) + '%';
     sendCommand({ action: 'setVolume', value: val });
 });
 
-// --- Progress scrub ---
 progressSlider.addEventListener('input', (e) => {
     const percent = parseFloat(e.target.value) / 100;
     sendCommand({ action: 'seek', percent });
 });
 
-// --- Custom Uploads ---
 const fileInput = document.getElementById('fileInput');
 const customGrid = document.getElementById('customGrid');
 const uploadZone = document.getElementById('uploadZone');
@@ -728,7 +733,6 @@ uploadZone.addEventListener('drop', e => {
     }
 });
 
-// --- University Songs (Contingent) ---
 const contingentGrid = document.getElementById('contingentGrid');
 CONTINGENT_SONGS.forEach((path, index) => {
     const btn = document.createElement('button');
@@ -755,7 +759,6 @@ const slideCount = document.getElementById('slideCount');
 const slidePreviewImg = document.getElementById('slidePreviewImg');
 const slideThumbList = document.getElementById('slideThumbList');
 
-// PDF.js
 const script = document.createElement('script');
 script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
 document.head.appendChild(script);
@@ -827,17 +830,14 @@ function renderSlideThumbnails() {
     });
     slideThumbList.innerHTML = html;
 
-    // Event listeners for thumb clicks and actions
     document.querySelectorAll('.slide-thumb').forEach(el => {
         const idx = parseInt(el.dataset.index);
         el.addEventListener('click', (e) => {
-            // Prevent if clicking on action buttons
             if (e.target.closest('.slide-thumb-actions')) return;
             if (idx !== currentSlideIndex) goToSlide(idx);
         });
     });
 
-    // Move up
     document.querySelectorAll('.move-up').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -852,7 +852,6 @@ function renderSlideThumbnails() {
         });
     });
 
-    // Move down
     document.querySelectorAll('.move-down').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -867,7 +866,6 @@ function renderSlideThumbnails() {
         });
     });
 
-    // Delete
     document.querySelectorAll('.del-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -895,7 +893,6 @@ function goToSlide(index) {
     sendCommand({ action: 'navigateSlide', index, dataURL });
 }
 
-// Drag & drop for slides
 slideUploadZone.addEventListener('dragover', e => { e.preventDefault(); slideUploadZone.classList.add('drag-over'); });
 slideUploadZone.addEventListener('dragleave', () => slideUploadZone.classList.remove('drag-over'));
 slideUploadZone.addEventListener('drop', e => {
@@ -908,54 +905,43 @@ slideUploadZone.addEventListener('drop', e => {
 });
 
 // ============================================================
-// 9. SLIDE EDITOR – LOGOS & TEMPLATE
+// 9. SLIDE EDITOR – PRE-LOAD LOGOS & TEMPLATE IMAGE
 // ============================================================
-const logoFileInput = document.getElementById('logoFileInput');
 const logoGrid = document.getElementById('logoGrid');
 const templateContainer = document.getElementById('templateContainer');
-let logos = []; // array of dataURL strings
+let templateLogos = []; // { dataURL, x, y, element }
 
-// Upload logos
-logoFileInput.addEventListener('change', (e) => {
-    const files = e.target.files;
-    if (!files.length) return;
-    for (let file of files) {
-        if (!file.type.startsWith('image/')) continue;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            logos.push(ev.target.result);
-            renderLogos();
-        };
-        reader.readAsDataURL(file);
-    }
-    logoFileInput.value = '';
-});
+// Set the template background image
+templateContainer.style.backgroundImage = `url('Template Majlis Sukipt.png')`;
 
-function renderLogos() {
-    if (!logos.length) {
-        logoGrid.innerHTML = '<div style="color:#94a3b8; font-size:0.8rem; width:100%; text-align:center;">Upload logos to begin</div>';
-        return;
-    }
-    let html = '';
-    logos.forEach((dataURL, idx) => {
-        html += `<div class="logo-item" data-index="${idx}"><img src="${dataURL}" alt="Logo ${idx}" /></div>`;
-    });
-    logoGrid.innerHTML = html;
-    // Click to add logo to template
-    document.querySelectorAll('.logo-item').forEach(el => {
-        el.addEventListener('click', () => {
-            const idx = parseInt(el.dataset.index);
-            addLogoToTemplate(logos[idx]);
+// Load all logos from LogoIPT folder
+function loadLogos() {
+    logoGrid.innerHTML = ''; // clear "Loading..."
+    LOGO_FILES.forEach((filename) => {
+        const logoPath = `LogoIPT/${filename}`;
+        const div = document.createElement('div');
+        div.className = 'logo-item';
+        div.innerHTML = `<img src="${logoPath}" alt="${filename}" />`;
+        div.addEventListener('click', () => {
+            // Use the actual image dataURL? We can just pass the path.
+            // But we need to load the image to get dataURL? We can pass the path and load when adding.
+            // To avoid CORS issues, we'll fetch the image as blob and convert to dataURL.
+            fetch(logoPath)
+                .then(res => res.blob())
+                .then(blob => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        addLogoToTemplate(e.target.result);
+                    };
+                    reader.readAsDataURL(blob);
+                })
+                .catch(err => console.warn('Failed to load logo:', logoPath, err));
         });
+        logoGrid.appendChild(div);
     });
 }
 
-// Template state
-let templateLogos = []; // { dataURL, x, y, element }
-let dragState = null; // { element, offsetX, offsetY }
-
 function addLogoToTemplate(dataURL) {
-    // Create a new logo element inside template container
     const logoEl = document.createElement('div');
     logoEl.className = 'template-logo';
     logoEl.style.left = '50%';
@@ -963,14 +949,9 @@ function addLogoToTemplate(dataURL) {
     logoEl.style.transform = 'translate(-50%, -50%)';
     logoEl.innerHTML = `<img src="${dataURL}" alt="logo" />`;
 
-    // Store data
     const entry = { dataURL, x: 50, y: 50, element: logoEl };
     templateLogos.push(entry);
-
-    // Append to container
     templateContainer.appendChild(logoEl);
-
-    // Enable drag
     enableDrag(logoEl, entry);
 }
 
@@ -1013,7 +994,6 @@ function enableDrag(element, entry) {
     }
 }
 
-// Clear template
 document.getElementById('clearTemplateBtn').addEventListener('click', () => {
     templateLogos.forEach(entry => {
         if (entry.element.parentNode) entry.element.remove();
@@ -1021,10 +1001,8 @@ document.getElementById('clearTemplateBtn').addEventListener('click', () => {
     templateLogos = [];
 });
 
-// Save template as slide
 document.getElementById('saveTemplateBtn').addEventListener('click', async () => {
     const container = templateContainer;
-    // Use html2canvas to capture the container (including logos)
     try {
         const canvas = await html2canvas(container, {
             scale: 1.0,
@@ -1037,8 +1015,6 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
         slides.push(dataURL);
         renderSlideThumbnails();
         goToSlide(slides.length - 1);
-        // Optional: clear template after save?
-        // We'll leave it so user can edit further.
         statusEl.textContent = '✅ Template saved as slide #' + slides.length;
         statusEl.style.opacity = '1';
         setTimeout(() => { statusEl.style.opacity = '0.5'; }, 3000);
@@ -1091,10 +1067,11 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ============================================================
-// 12. INIT – check songs on load
+// 12. INIT – load logos & check files
 // ============================================================
 console.log('🎤 Presenter Cockpit loading...');
-checkAllSongs();
+loadLogos();
+checkAllFiles();
 
 console.log('✅ Ready.');
 </script>
