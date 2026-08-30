@@ -72,17 +72,28 @@
             } else if (data.action === 'medalSlide') {
                 showMedalSlide(data.logos, data.tie, data.sport);
             } else if (data.action === 'backdrop') {
-                stopMedalSlide();
-                slideImg.src = BACKDROP;
-                document.title = '📺 Backdrop';
+                showBackdrop();
             }
         };
 
         // ============================================================
         // 3. ANIMATED MEDAL SLIDE (flags waving) + BACKDROP
         // ============================================================
-        const BACKDROP = 'Sukipt7 Main Backdrop.png';
-        slideImg.src = BACKDROP;   // idle screen before/after each ceremony
+        const backdropImg = new Image(); backdropImg.src = 'Sukipt7 Main Backdrop.png';
+        const BACKDROP_LOGO_BOX = [123, 197, 849, 366];   // where the (blurry) logo sits on the 960x540 backdrop
+        async function showBackdrop() {   // idle screen before/after each ceremony, with the hi-res logo
+            if (!backdropImg.complete) await new Promise(r => backdropImg.onload = r);
+            if (!Medal.logo.complete) await new Promise(r => Medal.logo.onload = r);
+            stopMedalSlide();
+            const ctx = medalCanvas.getContext('2d');
+            ctx.drawImage(backdropImg, 0, 0, 1920, 1080);
+            const [x0, y0, x1, y1] = BACKDROP_LOGO_BOX.map(v => v * 2);
+            ctx.fillStyle = '#fff'; ctx.fillRect(x0 - 8, y0 - 8, x1 - x0 + 16, y1 - y0 + 16);
+            Medal.drawContained(ctx, Medal.logo, x0, y0, x1, y1, 0);
+            slideImg.style.display = 'none'; medalCanvas.style.display = 'block';
+            document.title = '📺 Backdrop';
+        }
+        showBackdrop();
         const medalCanvas = document.getElementById('medal-canvas');
         const medalTpl = new Image(); medalTpl.src = 'Template Majlis Sukipt.png';
         let medalAnim = null;
