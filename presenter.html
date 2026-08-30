@@ -6,11 +6,8 @@
     <title>SUKIPT 2026 - Presenter Cockpit</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏃</text></svg>" />
     <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@400;600;700&display=swap" rel="stylesheet">
-    <!-- html2canvas -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
-        /* ====== ALL ORIGINAL STYLES (unchanged) ====== */
-        /* ... (same as before – copy from the previous version) ... */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
             --um-blue: #0033a0; --um-blue-light: #0066cc;
@@ -287,14 +284,25 @@
         .logo-grid {
             display: flex; flex-wrap: wrap; gap: 8px;
         }
+        /* ===== UPDATED: NO BOX, NO BORDER, NO BACKGROUND on logo items ===== */
         .logo-item {
-            width: 60px; height: 60px; border: 2px solid #cbd5e1; border-radius: 8px;
-            overflow: hidden; cursor: pointer; transition: 0.2s;
-            display: flex; align-items: center; justify-content: center;
-            background: white;
+            width: 60px; height: 60px;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        .logo-item:hover { border-color: var(--um-blue); transform: scale(1.05); }
-        .logo-item img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .logo-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+        .logo-item:hover {
+            transform: scale(1.1);
+        }
+
         .template-wrapper {
             flex: 2; min-width: 400px; background: #f1f5f9; border-radius: 16px;
             padding: 16px; border: 1px solid #e2e8f0;
@@ -308,17 +316,33 @@
             background-position: center;
             background-color: white;
         }
-        /* No flag placeholders anymore – background is the template image */
+        /* ===== UPDATED: NO BOX, NO BORDER, NO SHADOW on template logos ===== */
         .template-logo {
-            position: absolute; cursor: grab; user-select: none;
-            width: 60px; height: 60px; border: 2px solid var(--um-blue);
-            border-radius: 8px; background: white; padding: 4px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            display: flex; align-items: center; justify-content: center;
+            position: absolute;
+            cursor: grab;
+            user-select: none;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             z-index: 10;
+            transition: transform 0.1s;
         }
-        .template-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
-        .template-logo.dragging { cursor: grabbing; opacity: 0.8; }
+        .template-logo:hover {
+            transform: scale(1.05);
+        }
+        .template-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+        .template-logo.dragging {
+            cursor: grabbing;
+            opacity: 0.8;
+            transform: scale(1.1);
+        }
         .editor-buttons {
             display: flex; gap: 12px; flex-wrap: wrap;
         }
@@ -527,7 +551,7 @@ const CONTINGENT_SONGS = [
     './music/Lagu Universiti/UTP.mp3','./music/Lagu Universiti/UUM.mp3'
 ];
 
-// 64 logos as given
+// 64 logos
 const LOGO_FILES = [
     'alam.png', 'APU.png', 'City University.png', 'gmiLogo.png',
     'HELP.png', 'HeriotWattLogo.png', 'IIUM-UIA.png', 'IMU.png',
@@ -546,9 +570,10 @@ const LOGO_FILES = [
     'USM.png', 'UTAR.png', 'UTEM.png', 'UTHM.png',
     'UTM.png', 'UTP.png', 'UUM.png', 'Xiamen.png'
 ];
+const TEMPLATE_IMAGE = 'Template Majlis Sukipt.png';   // your template background
 
 // ============================================================
-// 2. FILE CHECKER – songs AND logos
+// 2. FILE CHECKER – songs, logos AND template
 // ============================================================
 async function checkFileExists(url) {
     try {
@@ -562,13 +587,11 @@ async function checkFileExists(url) {
 async function checkAllFiles() {
     const allSongs = [FLAG_SONG, ...HOUSE_SONGS, ...CONTINGENT_SONGS];
     const allLogos = LOGO_FILES.map(f => `LogoIPT/${f}`);
-    const allFiles = [...allSongs, ...allLogos];
-
+    const allFiles = [...allSongs, ...allLogos, TEMPLATE_IMAGE];
     const results = await Promise.all(allFiles.map(async (url) => {
         const exists = await checkFileExists(url);
         return { url, exists };
     }));
-
     const missing = results.filter(r => !r.exists);
     if (missing.length) {
         console.warn('❌ Missing files:');
@@ -909,10 +932,13 @@ slideUploadZone.addEventListener('drop', e => {
 // ============================================================
 const logoGrid = document.getElementById('logoGrid');
 const templateContainer = document.getElementById('templateContainer');
-let templateLogos = []; // { dataURL, x, y, element }
+let templateLogos = [];
 
-// Set the template background image
-templateContainer.style.backgroundImage = `url('Template Majlis Sukipt.png')`;
+// Set template background with proper encoding and fallback
+const templateUrl = encodeURI(TEMPLATE_IMAGE);
+templateContainer.style.backgroundImage = `url('${templateUrl}')`;
+templateContainer.style.backgroundColor = '#ffffff';
+// If image fails, the container will stay white
 
 // Load all logos from LogoIPT folder
 function loadLogos() {
@@ -923,9 +949,6 @@ function loadLogos() {
         div.className = 'logo-item';
         div.innerHTML = `<img src="${logoPath}" alt="${filename}" />`;
         div.addEventListener('click', () => {
-            // Use the actual image dataURL? We can just pass the path.
-            // But we need to load the image to get dataURL? We can pass the path and load when adding.
-            // To avoid CORS issues, we'll fetch the image as blob and convert to dataURL.
             fetch(logoPath)
                 .then(res => res.blob())
                 .then(blob => {
