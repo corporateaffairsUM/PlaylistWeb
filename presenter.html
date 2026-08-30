@@ -3,11 +3,20 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="
+        script-src 'self' 'unsafe-eval' https://cdnjs.cloudflare.com https://fonts.googleapis.com;
+        worker-src 'self' blob:;
+        connect-src 'self' https:;
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+        font-src https://fonts.gstatic.com;
+        img-src 'self' data: blob:;
+    ">
     <title>SUKIPT 2026 - Presenter Cockpit</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏃</text></svg>" />
     <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
+        /* ===== All your existing styles (unchanged) ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
             --um-blue: #0033a0; --um-blue-light: #0066cc;
@@ -315,7 +324,6 @@
             background-position: center;
             background-color: white;
         }
-        /* ===== LOGOS ON TEMPLATE – NO BOX, NO BORDER, but now with resize handle ===== */
         .template-logo {
             position: absolute;
             cursor: grab;
@@ -334,14 +342,13 @@
             height: 100%;
             object-fit: contain;
             display: block;
-            pointer-events: none; /* so clicks pass through to the container for dragging */
+            pointer-events: none;
         }
         .template-logo.dragging {
             cursor: grabbing;
             opacity: 0.8;
             transform: scale(1.05);
         }
-        /* Resize handle – appears on hover */
         .resize-handle {
             position: absolute;
             bottom: -4px;
@@ -417,22 +424,17 @@
 
     <!-- ======= TAB 1: MAIN CONTROL ======= -->
     <div id="mainTabContent" class="tab-content active">
-        <!-- Flag -->
         <div class="section">
             <div class="section-title flag-title">🚩 Flag Song</div>
             <div class="btn-grid">
                 <button class="btn btn-flag" id="flagBtn">▶ Play LAGU SUKIPT</button>
             </div>
         </div>
-
-        <!-- House -->
         <div class="section">
             <div class="section-title house-title">🎶 House Music · 19 Tracks</div>
             <button class="btn btn-resume" id="resumeHouseBtn">▶ Play / Resume House Playlist</button>
             <div class="btn-grid" id="houseGrid"></div>
         </div>
-
-        <!-- Custom Uploads -->
         <div class="section">
             <div class="section-title custom-title">📂 Custom Uploads</div>
             <div class="upload-zone" id="uploadZone">
@@ -456,7 +458,6 @@
 
     <!-- ======= TAB 3: SLIDES ======= -->
     <div id="slidesTabContent" class="tab-content">
-        <!-- Slide Upload & Management -->
         <div class="section">
             <div class="section-title slides-title">🖼️ Slide Manager</div>
             <div class="section-sub">Upload PDF or PNG/JPEG to build your presentation.</div>
@@ -477,27 +478,19 @@
             </div>
         </div>
 
-        <!-- Slide Editor -->
         <div class="section">
             <div class="section-title editor-title">🖌️ Slide Editor</div>
             <div class="section-sub">Click a logo to add it, drag to move, drag the blue dot to resize.</div>
 
             <div class="editor-layout">
-                <!-- Left: Logo Selection -->
                 <div class="logo-panel">
                     <h4>📋 University Logos (64)</h4>
                     <div class="logo-grid" id="logoGrid">
-                        <!-- Populated by JavaScript -->
                         <div style="color:#94a3b8; font-size:0.8rem; width:100%; text-align:center;">Loading logos...</div>
                     </div>
                 </div>
-
-                <!-- Right: Template -->
                 <div class="template-wrapper">
-                    <div class="template-container" id="templateContainer">
-                        <!-- Template background is set via CSS background-image -->
-                        <!-- Logos will be added here dynamically -->
-                    </div>
+                    <div class="template-container" id="templateContainer"></div>
                     <div class="editor-buttons">
                         <button class="btn btn-editor" id="clearTemplateBtn">🧹 Clear</button>
                         <button class="btn btn-editor" id="saveTemplateBtn">💾 Save as Slide</button>
@@ -517,7 +510,6 @@
                 <span id="totalTimeDisplay">0:00</span>
             </div>
         </div>
-
         <div class="controls">
             <div class="volume-label">
                 <span>🔊 Master Volume</span>
@@ -587,7 +579,7 @@ const LOGO_FILES = [
     'USM.png', 'UTAR.png', 'UTEM.png', 'UTHM.png',
     'UTM.png', 'UTP.png', 'UUM.png', 'Xiamen.png'
 ];
-const TEMPLATE_IMAGE = 'Template Majlis Sukipt.png';   // your template background
+const TEMPLATE_IMAGE = 'Template Majlis Sukipt.png';
 
 // ============================================================
 // 2. FILE CHECKER – songs, logos AND template
@@ -952,14 +944,14 @@ const logoGrid = document.getElementById('logoGrid');
 const templateContainer = document.getElementById('templateContainer');
 let templateLogos = [];
 
-// Set template background with proper encoding and fallback
+// Set template background
 const templateUrl = encodeURI(TEMPLATE_IMAGE);
 templateContainer.style.backgroundImage = `url('${templateUrl}')`;
 templateContainer.style.backgroundColor = '#ffffff';
 
 // Load all logos from LogoIPT folder
 function loadLogos() {
-    logoGrid.innerHTML = ''; // clear "Loading..."
+    logoGrid.innerHTML = '';
     LOGO_FILES.forEach((filename) => {
         const logoPath = `LogoIPT/${filename}`;
         const div = document.createElement('div');
@@ -983,11 +975,10 @@ function loadLogos() {
 
 // Add logo to template with resize capability and high-res sizing
 function addLogoToTemplate(dataURL) {
-    const initialSize = 80; // bigger default for high quality
+    const initialSize = 80;
 
     const logoEl = document.createElement('div');
     logoEl.className = 'template-logo';
-    // Center it initially
     logoEl.style.left = '50%';
     logoEl.style.top = '50%';
     logoEl.style.transform = 'translate(-50%, -50%)';
@@ -1013,13 +1004,11 @@ function addLogoToTemplate(dataURL) {
     enableResize(logoEl, entry);
 }
 
-// Drag logic
 function enableDrag(element, entry) {
     let isDragging = false;
     let startX, startY, origX, origY;
 
     element.addEventListener('mousedown', (e) => {
-        // Ignore if the click is on the resize handle
         if (e.target.classList.contains('resize-handle')) return;
         e.preventDefault();
         const rect = templateContainer.getBoundingClientRect();
@@ -1055,7 +1044,6 @@ function enableDrag(element, entry) {
     }
 }
 
-// Resize logic (drag the blue dot)
 function enableResize(element, entry) {
     const handle = element.querySelector('.resize-handle');
     if (!handle) return;
@@ -1079,11 +1067,8 @@ function enableResize(element, entry) {
         if (!isResizing) return;
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
-        // Use the average of dx/dy to keep it roughly proportional, or use dx for width.
-        // We'll use dx for width and dy for height to allow freeform, but let's keep square-ish or independent.
         let newW = Math.max(30, origWidth + dx);
         let newH = Math.max(30, origHeight + dy);
-        // Optionally lock aspect ratio? Let's keep independent for flexibility.
         entry.width = newW;
         entry.height = newH;
         element.style.width = newW + 'px';
@@ -1104,29 +1089,48 @@ document.getElementById('clearTemplateBtn').addEventListener('click', () => {
     templateLogos = [];
 });
 
+// ========== FIXED SAVE: fixed size before capture ==========
 document.getElementById('saveTemplateBtn').addEventListener('click', async () => {
     const container = templateContainer;
+    // Store original inline styles
+    const origWidth = container.style.width;
+    const origHeight = container.style.height;
+    const origAspect = container.style.aspectRatio;
+
     try {
-        // HIGH QUALITY: scale 2.5 for crisp 1080p output
+        // Force a fixed 16:9 size for capture (960x540, then scale 2x => 1920x1080)
+        container.style.width = '960px';
+        container.style.height = '540px';
+        container.style.aspectRatio = 'auto';
+
+        // Wait a tick for layout to settle
+        await new Promise(r => requestAnimationFrame(r));
+
         const canvas = await html2canvas(container, {
-            scale: 2.5,
+            scale: 2,
             useCORS: true,
             backgroundColor: '#ffffff',
             allowTaint: false,
             logging: false,
-            width: container.scrollWidth,
-            height: container.scrollHeight
+            width: 960,
+            height: 540
         });
+
         const dataURL = canvas.toDataURL('image/png');
         slides.push(dataURL);
         renderSlideThumbnails();
-        // IMPORTANT: Do NOT auto-jump to the new slide. Keep current selection.
+        // Keep current slide selected – do NOT jump
         statusEl.textContent = '✅ Template saved as slide #' + slides.length;
         statusEl.style.opacity = '1';
         setTimeout(() => { statusEl.style.opacity = '0.5'; }, 3000);
     } catch (err) {
         console.error('html2canvas error:', err);
         statusEl.textContent = '❌ Failed to capture template. Check console.';
+    } finally {
+        // Restore original sizing
+        container.style.width = origWidth || '';
+        container.style.height = origHeight || '';
+        container.style.aspectRatio = origAspect || '16/9';
     }
 });
 
