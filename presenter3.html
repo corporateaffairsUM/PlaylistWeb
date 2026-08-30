@@ -1133,7 +1133,7 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
     }
     ctx.drawImage(templateImg, sx, sy, sw, sh, 0, 0, 1920, 1080);
 
-    // ========== LOGO DRAWING – ORIGINAL FILE SIZE, NO SCALING ==========
+    // ========== LOGO DRAWING – ASPECT RATIO LOCKED ==========
     for (const entry of templateLogos) {
         const logoImg = new Image();
         logoImg.src = entry.dataURL;
@@ -1142,18 +1142,19 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
             logoImg.onerror = () => reject('Failed to load logo');
         });
     
-        // Use the image's natural dimensions (the actual pixel size of the PNG)
-        const imgW = logoImg.naturalWidth;
-        const imgH = logoImg.naturalHeight;
+        // Calculate scale from container to 1920x1080
+        const scale = 1920 / containerW; // Same scale for width and height
     
-        // Position: logo center at entry.x%, entry.y% of the 1920x1080 canvas
+        const boxW = entry.width * scale;
+        const boxH = entry.height * scale; // Because entry.width/entry.height matches the aspect ratio
+    
         const centerX = (entry.x / 100) * 1920;
         const centerY = (entry.y / 100) * 1080;
-        const left = centerX - imgW / 2;
-        const top = centerY - imgH / 2;
+        const left = centerX - boxW / 2;
+        const top = centerY - boxH / 2;
     
-        // Draw the logo at its original size – no scaling, no stretching
-        ctx.drawImage(logoImg, left, top, imgW, imgH);
+        // Draw – no stretching because boxW/boxH has the exact same aspect ratio as the logo
+        ctx.drawImage(logoImg, left, top, boxW, boxH);
     }
 
     // 6. Export as PNG and add to slides
