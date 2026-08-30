@@ -16,7 +16,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
-        /* ===== ALL STYLES (unchanged) ===== */
+        /* ===== ALL STYLES (unchanged – exactly as before) ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
             --um-blue: #0033a0; --um-blue-light: #0066cc;
@@ -973,7 +973,7 @@ function loadLogos() {
     });
 }
 
-// Add logo to template with resize capability and high-res sizing
+// Add logo to template with resize capability
 function addLogoToTemplate(dataURL) {
     const initialSize = 80;
 
@@ -1089,36 +1089,85 @@ document.getElementById('clearTemplateBtn').addEventListener('click', () => {
     templateLogos = [];
 });
 
-// ========== FIXED SAVE: use container's natural size (no stretching) ==========
+// ========== NEW CANVAS-BASED SAVE: NO STRETCHING ==========
 document.getElementById('saveTemplateBtn').addEventListener('click', async () => {
-    const container = templateContainer;
-    try {
-        // Get the container's actual pixel dimensions (CSS pixels)
-        const rect = container.getBoundingClientRect();
-        const width = rect.width;
-        const height = rect.height;
+    // 1. Get the container's current size (for scaling logo sizes)
+    const containerRect = templateContainer.getBoundingClientRect();
+    const containerW = containerRect.width;
+    const containerH = containerRect.height;
 
-        const canvas = await html2canvas(container, {
-            scale: 2,               // double resolution for crispness
-            useCORS: true,
-            backgroundColor: '#ffffff',
-            allowTaint: false,
-            logging: false,
-            width: width,
-            height: height
+    // 2. Load the template image
+    const templateImg = new Image();
+    templateImg.crossOrigin = 'anonymous';
+    templateImg.src = TEMPLATE_IMAGE; // relative path, will be resolved
+
+    await new Promise((resolve, reject) => {
+        templateImg.onload = resolve;
+        templateImg.onerror = () => reject('Failed to load template image');
+    });
+
+    // 3. Create a 1920x1080 canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = 1920;
+    canvas.height = 1080;
+    const ctx = canvas.getContext('2d');
+
+    // 4. Draw the background – fill entire canvas (aspect ratio may differ, but we want to fill)
+    //    If the template image is not 16:9, we could preserve aspect ratio with "contain" or "cover".
+    //    We'll use "cover" by drawing to cover the canvas.
+    const bgAspect = templateImg.width / templateImg.height;
+    const canvasAspect = 1920 / 1080; // 1.777...
+    let sx, sy, sw, sh;
+    if (bgAspect > canvasAspect) {
+        // Image is wider than canvas: crop sides
+        sw = templateImg.height * canvasAspect;
+        sh = templateImg.height;
+        sx = (templateImg.width - sw) / 2;
+        sy = 0;
+    } else {
+        // Image is taller: crop top/bottom
+        sw = templateImg.width;
+        sh = templateImg.width / canvasAspect;
+        sx = 0;
+        sy = (templateImg.height - sh) / 2;
+    }
+    ctx.drawImage(templateImg, sx, sy, sw, sh, 0, 0, 1920, 1080);
+
+    // 5. Draw each logo
+    for (const entry of templateLogos) {
+        // Load logo image from its dataURL
+        const logoImg = new Image();
+        logoImg.src = entry.dataURL;
+        await new Promise((resolve, reject) => {
+            logoImg.onload = resolve;
+            logoImg.onerror = () => reject('Failed to load logo image');
         });
 
-        const dataURL = canvas.toDataURL('image/png');
-        slides.push(dataURL);
-        renderSlideThumbnails();
-        // Do NOT change currentSlideIndex – stay on the slide you were viewing.
-        statusEl.textContent = '✅ Template saved as slide #' + slides.length;
-        statusEl.style.opacity = '1';
-        setTimeout(() => { statusEl.style.opacity = '0.5'; }, 3000);
-    } catch (err) {
-        console.error('html2canvas error:', err);
-        statusEl.textContent = '❌ Failed to capture template. Check console.';
+        // Compute pixel position and size on the 1920x1080 canvas
+        const px = (entry.x / 100) * 1920;
+        const py = (entry.y / 100) * 1080;
+        // Scale logo size from container pixels to canvas pixels
+        const scaleX = 1920 / containerW;
+        const scaleY = 1080 / containerH;
+        const w = entry.width * scaleX;
+        const h = entry.height * scaleY;
+
+        // Center the logo at the calculated position (top-left corner)
+        const left = px - w / 2;
+        const top = py - h / 2;
+
+        // Draw the logo
+        ctx.drawImage(logoImg, left, top, w, h);
     }
+
+    // 6. Export as PNG and add to slides
+    const dataURL = canvas.toDataURL('image/png');
+    slides.push(dataURL);
+    renderSlideThumbnails();
+    // Keep current slide – do NOT jump
+    statusEl.textContent = '✅ Template saved as slide #' + slides.length;
+    statusEl.style.opacity = '1';
+    setTimeout(() => { statusEl.style.opacity = '0.5'; }, 3000);
 });
 
 // ============================================================
