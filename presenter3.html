@@ -1133,7 +1133,7 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
     }
     ctx.drawImage(templateImg, sx, sy, sw, sh, 0, 0, 1920, 1080);
 
-    // 5. Draw each logo – FIXED: use a consistent size, ignore stretched entry.width/height
+    // ========== LOGO DRAWING – ORIGINAL FILE SIZE, NO SCALING ==========
     for (const entry of templateLogos) {
         const logoImg = new Image();
         logoImg.src = entry.dataURL;
@@ -1142,32 +1142,18 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
             logoImg.onerror = () => reject('Failed to load logo');
         });
     
-        // Get natural dimensions
-        const imgW = logoImg.naturalWidth || logoImg.width;
-        const imgH = logoImg.naturalHeight || logoImg.height;
-        const imgAspect = imgW / imgH;
+        // Use the image's natural dimensions (the actual pixel size of the PNG)
+        const imgW = logoImg.naturalWidth;
+        const imgH = logoImg.naturalHeight;
     
-        // Calculate position on canvas (center of the logo)
+        // Position: logo center at entry.x%, entry.y% of the 1920x1080 canvas
         const centerX = (entry.x / 100) * 1920;
         const centerY = (entry.y / 100) * 1080;
+        const left = centerX - imgW / 2;
+        const top = centerY - imgH / 2;
     
-        // Fixed size: use a percentage of the canvas width (e.g., 5% of 1920 = 96px)
-        // This keeps all logos the same size regardless of how they were resized in the editor.
-        const fixedSize = 1920 * 0.1; // 6% of canvas width – adjust this number to your liking
-        let drawW, drawH;
-        if (imgAspect > 1) {
-            drawW = fixedSize;
-            drawH = fixedSize / imgAspect;
-        } else {
-            drawH = fixedSize;
-            drawW = fixedSize * imgAspect;
-        }
-    
-        // Center the logo at the position
-        const left = centerX - drawW / 2;
-        const top = centerY - drawH / 2;
-    
-        ctx.drawImage(logoImg, left, top, drawW, drawH);
+        // Draw the logo at its original size – no scaling, no stretching
+        ctx.drawImage(logoImg, left, top, imgW, imgH);
     }
 
     // 6. Export as PNG and add to slides
