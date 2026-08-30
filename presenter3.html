@@ -1,12 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>SUKIPT 2026 - Presenter</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- NO CSP META TAG -->
+    <title>SUKIPT 2026 - Presenter Cockpit</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏃</text></svg>" />
     <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        /* ===== ALL STYLES (unchanged) ===== */
+        /* ===== ALL STYLES (unchanged from before) ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
             --um-blue: #0033a0; --um-blue-light: #0066cc;
@@ -605,7 +607,7 @@ async function checkAllFiles() {
 }
 
 // ============================================================
-// 3. BROADCAST CHANNEL
+// 3. BROADCAST CHANNEL (only for slide sync now)
 // ============================================================
 const channel = new BroadcastChannel('presenter_hdmi');
 
@@ -621,58 +623,242 @@ const volumeSlider = document.getElementById('volumeSlider');
 const volDisplay = document.getElementById('volDisplay');
 
 // ============================================================
-// 5. SEND COMMANDS TO PUBLIC
+// 5. FULL AUDIO ENGINE (moved from public page)
 // ============================================================
-function sendCommand(cmd) {
-    channel.postMessage(cmd);
+let audioCtx = null;
+let masterGain = null;
+let currentSources = [];
+let activeAudioEl = null;
+let activeUrl = null;
+
+// House state
+let houseState = { index: 0, time: 0, isActive: false, isPlaying: false };
+
+// Unlock audio on first user interaction (click anywhere)
+document.addEventListener('click', () => {
+    if (!audioCtx) {
+        audioCtx = new(window.AudioContext || window.webkitAudioContext)();
+        masterGain = audioCtx.createGain();
+        masterGain.gain.value = 1.0;
+        masterGain.connect(audioCtx.destination);
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+}, { once: true });
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new(window.AudioContext || window.webkitAudioContext)();
+        masterGain = audioCtx.createGain();
+        masterGain.gain.value = 1.0;
+        masterGain.connect(audioCtx.destination);
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
 }
 
-// ============================================================
-// 6. UI UPDATES (from public status)
-// ============================================================
-channel.onmessage = (e) => {
-    const data = e.data;
-    if (!data) return;
+function fadeOutAll(duration = 1.5, callback = null) {
+    if (currentSources.length === 0) {
+        if (callback) callback();
+        return;
+    }
+    const promises = currentSources.map((item) => {
+        return new Promise((resolve) => {
+            const gain = item.gain;
+            const startVal = gain.gain.value;
+            const startTime = audioCtx.currentTime;
+            gain.gain.setValueAtTime(startVal, startTime);
+            gain.gain.linearRampToValueAtTime(0, startTime + duration);
+            setTimeout(() => {
+                if (item.audioEl) {
+                    item.audioEl.pause();
+                    item.audioEl.currentTime = 0;
+                }
+                try { item.source.disconnect(); } catch (e) {}
+                resolve();
+            }, duration * 1000 + 50);
+        });
+    });
+    Promise.all(promises).then(() => {
+        currentSources = [];
+        activeAudioEl = null;
+        activeUrl = null;
+        if (callback) callback();
+        updateStatus('All stopped');
+        updateProgressBar();
+    });
+}
 
-    if (data.type === 'progress') {
-        const { currentTime, duration } = data;
-        if (duration && duration > 0) {
-            const percent = (currentTime / duration) * 100;
-            progressSlider.value = percent;
-            currentTimeDisplay.textContent = formatTime(currentTime);
-            totalTimeDisplay.textContent = formatTime(duration);
+function internalPlayFresh(url, startTime = 0, fadeInDuration = 1.5, isHouse = false) {
+    initAudio();
+
+    const audioEl = new Audio(url);
+    audioEl.preload = 'auto';
+    audioEl.currentTime = startTime;
+
+    audioEl.onerror = (e) => {
+        const errMsg = `❌ Failed to load: ${url.split('/').pop()}`;
+        console.error(errMsg, e);
+        updateStatus(errMsg);
+        const idx = currentSources.findIndex(s => s.audioEl === audioEl);
+        if (idx !== -1) {
+            currentSources.splice(idx, 1);
         }
-    } else if (data.type === 'nowPlaying') {
-        nowPlayingLabel.textContent = `▶ ${data.label}`;
-    } else if (data.type === 'status') {
-        statusEl.textContent = data.msg;
-    } else if (data.type === 'volume') {
-        const val = Math.round(data.value * 100);
-        volumeSlider.value = val;
-        volDisplay.textContent = val + '%';
-    } else if (data.type === 'houseState') {
-        const btn = document.getElementById('resumeHouseBtn');
-        if (data.isPlaying) {
-            btn.textContent = '⏸ House Playing...';
-        } else {
-            btn.textContent = '▶ Play / Resume House';
+        if (activeAudioEl === audioEl) {
+            activeAudioEl = null;
+            activeUrl = null;
         }
-    } else if (data.type === 'flagState') {
-        const btn = document.getElementById('flagBtn');
-        if (data.isPlaying) {
-            btn.textContent = '⏹ Stop LAGU SUKIPT';
-            btn.classList.add('btn-playing');
-        } else {
-            btn.textContent = '▶ Play LAGU SUKIPT';
-            btn.classList.remove('btn-playing');
+    };
+
+    const source = audioCtx.createMediaElementSource(audioEl);
+    const gainNode = audioCtx.createGain();
+    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+    source.connect(gainNode);
+    gainNode.connect(masterGain);
+
+    audioEl.play().catch(e => {
+        if (e.name !== 'AbortError') {
+            console.warn('Play error:', e);
+            updateStatus(`Playback error: ${e.message}`);
         }
-    } else if (data.type === 'trackPlaying') {
-        document.querySelectorAll('.btn-playing').forEach(b => b.classList.remove('btn-playing'));
-        if (data.url) {
-            document.querySelectorAll(`[data-url="${CSS.escape(data.url)}"]`).forEach(b => b.classList.add('btn-playing'));
+    });
+    gainNode.gain.linearRampToValueAtTime(1, audioCtx.currentTime + fadeInDuration);
+
+    const item = { source, gain: gainNode, audioEl, url, isHouse };
+    currentSources.push(item);
+    activeAudioEl = audioEl;
+    activeUrl = url;
+
+    audioEl.addEventListener('timeupdate', () => {
+        if (activeAudioEl === audioEl) updateProgressBar();
+    });
+    audioEl.addEventListener('loadedmetadata', () => {
+        if (activeAudioEl === audioEl) updateProgressBar();
+    });
+    audioEl.addEventListener('ended', () => {
+        if (isHouse && currentSources.length > 0 && currentSources[0]?.audioEl === audioEl) {
+            handleHouseEnded();
+        }
+    });
+
+    const label = getDisplayName(url);
+    nowPlayingLabel.textContent = `▶ ${label}`;
+    updateStatus(`Playing: ${label}`);
+    updateProgressBar();
+    updateTrackUI(url);
+    if (isHouse) {
+        houseState.isPlaying = true;
+        updateHouseUI();
+    } else {
+        if (url === FLAG_SONG) updateFlagUI(true);
+    }
+    return item;
+}
+
+function playTrack(url, startTime = 0, isHouse = false) {
+    initAudio();
+
+    if (currentSources.length > 0 && houseState.isPlaying) {
+        const houseItem = currentSources.find(s => s.isHouse);
+        if (houseItem) {
+            houseState.time = houseItem.audioEl.currentTime;
+            houseState.index = HOUSE_SONGS.indexOf(houseItem.url);
+            if (houseState.index === -1) houseState.index = 0;
         }
     }
-};
+
+    if (isHouse) {
+        houseState.index = HOUSE_SONGS.indexOf(url);
+        if (houseState.index === -1) houseState.index = 0;
+        houseState.time = startTime;
+        houseState.isActive = true;
+        houseState.isPlaying = true;
+    } else {
+        if (houseState.isPlaying) {
+            const houseItem = currentSources.find(s => s.isHouse);
+            if (houseItem) houseState.time = houseItem.audioEl.currentTime;
+            houseState.isPlaying = false;
+        }
+    }
+
+    if (currentSources.length > 0) {
+        fadeOutAll(1.2, () => {
+            internalPlayFresh(url, startTime, 1.5, isHouse);
+        });
+    } else {
+        internalPlayFresh(url, startTime, 1.5, isHouse);
+    }
+}
+
+function stopTrack(url, duration = 1.2) {
+    const idx = currentSources.findIndex(item => item.url === url);
+    if (idx === -1) return false;
+    const item = currentSources[idx];
+    const gain = item.gain;
+    const startVal = gain.gain.value;
+    const startTime = audioCtx.currentTime;
+    gain.gain.setValueAtTime(startVal, startTime);
+    gain.gain.linearRampToValueAtTime(0, startTime + duration);
+    setTimeout(() => {
+        if (item.audioEl) { item.audioEl.pause();
+            item.audioEl.currentTime = 0; }
+        try { item.source.disconnect(); } catch (e) {}
+    }, duration * 1000 + 50);
+    currentSources.splice(idx, 1);
+    if (activeAudioEl === item.audioEl) {
+        activeAudioEl = null;
+        activeUrl = null;
+        nowPlayingLabel.textContent = 'Nothing playing';
+        updateProgressBar();
+    }
+    updateStatus('Stopped');
+    return true;
+}
+
+function isPlaying(url) {
+    return currentSources.some(item => item.url === url);
+}
+
+function getDisplayName(url) {
+    if (url.startsWith('blob:')) return 'Custom Upload';
+    let name = url.split('/').pop().replace(/\.[^/.]+$/, '').replace(/%20/g, ' ');
+    return name;
+}
+
+function handleHouseEnded() {
+    if (!houseState.isActive) return;
+    let nextIndex = houseState.index + 1;
+    if (nextIndex >= HOUSE_SONGS.length) nextIndex = 0;
+    houseState.index = nextIndex;
+    houseState.time = 0;
+    const nextUrl = HOUSE_SONGS[nextIndex];
+    if (currentSources.length > 0) {
+        fadeOutAll(0.8, () => {
+            internalPlayFresh(nextUrl, 0, 1.5, true);
+        });
+    } else {
+        internalPlayFresh(nextUrl, 0, 1.5, true);
+    }
+}
+
+function updateStatus(msg) {
+    statusEl.textContent = msg;
+}
+
+function updateProgressBar() {
+    if (activeAudioEl && !isNaN(activeAudioEl.duration) && activeAudioEl.duration > 0) {
+        const percent = (activeAudioEl.currentTime / activeAudioEl.duration) * 100;
+        progressSlider.value = percent;
+        currentTimeDisplay.textContent = formatTime(activeAudioEl.currentTime);
+        totalTimeDisplay.textContent = formatTime(activeAudioEl.duration);
+    } else {
+        progressSlider.value = 0;
+        currentTimeDisplay.textContent = '0:00';
+        totalTimeDisplay.textContent = '0:00';
+    }
+}
 
 function formatTime(seconds) {
     if (!seconds || isNaN(seconds)) return '0:00';
@@ -682,11 +868,57 @@ function formatTime(seconds) {
 }
 
 // ============================================================
-// 7. BUTTON EVENTS (send commands)
+// 6. UI UPDATE FUNCTIONS (local)
 // ============================================================
+function updateTrackUI(url) {
+    document.querySelectorAll('.btn-playing').forEach(b => b.classList.remove('btn-playing'));
+    if (url) {
+        document.querySelectorAll(`[data-url="${CSS.escape(url)}"]`).forEach(b => b.classList.add('btn-playing'));
+    }
+}
 
+function updateFlagUI(isPlaying) {
+    const btn = document.getElementById('flagBtn');
+    if (isPlaying) {
+        btn.textContent = '⏹ Stop LAGU SUKIPT';
+        btn.classList.add('btn-playing');
+    } else {
+        btn.textContent = '▶ Play LAGU SUKIPT';
+        btn.classList.remove('btn-playing');
+    }
+}
+
+function updateHouseUI() {
+    const btn = document.getElementById('resumeHouseBtn');
+    if (houseState.isPlaying) {
+        btn.textContent = '⏸ House Playing...';
+    } else {
+        btn.textContent = '▶ Play / Resume House';
+    }
+}
+
+// ============================================================
+// 7. BUTTON EVENTS (now they play audio directly)
+// ============================================================
 document.getElementById('flagBtn').addEventListener('click', () => {
-    sendCommand({ action: 'toggleFlag' });
+    initAudio();
+    if (isPlaying(FLAG_SONG)) {
+        stopTrack(FLAG_SONG);
+        updateFlagUI(false);
+        if (houseState.isActive) {
+            houseState.isPlaying = false;
+            updateHouseUI();
+        }
+    } else {
+        if (houseState.isPlaying) {
+            const houseItem = currentSources.find(s => s.isHouse);
+            if (houseItem) houseState.time = houseItem.audioEl.currentTime;
+            houseState.isPlaying = false;
+        }
+        playTrack(FLAG_SONG, 0, false);
+        updateFlagUI(true);
+        updateHouseUI();
+    }
 });
 
 const houseGrid = document.getElementById('houseGrid');
@@ -697,30 +929,87 @@ HOUSE_SONGS.forEach((path, index) => {
     const displayName = path.replace('./music/', '').replace('.mp3', '');
     btn.textContent = `🎵 ${displayName}`;
     btn.addEventListener('click', () => {
-        sendCommand({ action: 'playHouse', url: path, index });
+        initAudio();
+        if (isPlaying(path)) {
+            stopTrack(path);
+            btn.classList.remove('btn-playing');
+            updateHouseUI();
+        } else {
+            houseState.index = index;
+            houseState.time = 0;
+            houseState.isActive = true;
+            houseState.isPlaying = true;
+            playTrack(path, 0, true);
+            updateHouseUI();
+        }
     });
     houseGrid.appendChild(btn);
 });
 
 document.getElementById('resumeHouseBtn').addEventListener('click', () => {
-    sendCommand({ action: 'resumeHouse' });
+    initAudio();
+    if (houseState.isPlaying && currentSources.some(s => s.isHouse)) {
+        updateStatus('House is already playing.');
+        return;
+    }
+    if (!houseState.isActive) {
+        houseState.index = 0;
+        houseState.time = 0;
+        houseState.isActive = true;
+    }
+    houseState.isPlaying = true;
+    if (isPlaying(FLAG_SONG)) {
+        fadeOutAll(1.2, () => {
+            playTrack(HOUSE_SONGS[houseState.index], houseState.time, true);
+            updateHouseUI();
+            updateFlagUI(false);
+        });
+    } else if (currentSources.length > 0) {
+        fadeOutAll(1.2, () => {
+            playTrack(HOUSE_SONGS[houseState.index], houseState.time, true);
+            updateHouseUI();
+        });
+    } else {
+        playTrack(HOUSE_SONGS[houseState.index], houseState.time, true);
+        updateHouseUI();
+    }
 });
 
 document.getElementById('stopAllBtn').addEventListener('click', () => {
-    sendCommand({ action: 'stopAll' });
+    if (currentSources.length === 0) return;
+    const houseItem = currentSources.find(s => s.isHouse);
+    if (houseItem) {
+        houseState.time = houseItem.audioEl.currentTime;
+        houseState.isPlaying = false;
+    }
+    fadeOutAll(1.5, () => {
+        nowPlayingLabel.textContent = 'Nothing playing';
+        updateStatus('⏹ All stopped');
+        updateProgressBar();
+        updateFlagUI(false);
+        updateHouseUI();
+        updateTrackUI(null);
+    });
 });
 
 volumeSlider.addEventListener('input', (e) => {
-    const val = parseFloat(e.target.value) / 100;
+    const val = e.target.value / 100;
     volDisplay.textContent = Math.round(e.target.value) + '%';
-    sendCommand({ action: 'setVolume', value: val });
+    if (masterGain) {
+        masterGain.gain.setValueAtTime(val, audioCtx.currentTime);
+    }
 });
 
 progressSlider.addEventListener('input', (e) => {
+    if (!activeAudioEl || isNaN(activeAudioEl.duration) || activeAudioEl.duration === 0) return;
     const percent = parseFloat(e.target.value) / 100;
-    sendCommand({ action: 'seek', percent });
+    activeAudioEl.currentTime = percent * activeAudioEl.duration;
+    currentTimeDisplay.textContent = formatTime(activeAudioEl.currentTime);
 });
 
+// ============================================================
+// 8. CUSTOM UPLOADS
+// ============================================================
 const fileInput = document.getElementById('fileInput');
 const customGrid = document.getElementById('customGrid');
 const uploadZone = document.getElementById('uploadZone');
@@ -737,7 +1026,23 @@ fileInput.addEventListener('change', (e) => {
         const displayName = file.name.replace(/\.[^/.]+$/, '');
         btn.textContent = `🎵 ${displayName}`;
         btn.addEventListener('click', () => {
-            sendCommand({ action: 'playCustom', url: blobUrl });
+            initAudio();
+            if (isPlaying(blobUrl)) {
+                stopTrack(blobUrl);
+                btn.classList.remove('btn-playing');
+                updateHouseUI();
+            } else {
+                if (houseState.isPlaying) {
+                    const houseItem = currentSources.find(s => s.isHouse);
+                    if (houseItem) houseState.time = houseItem.audioEl.currentTime;
+                    houseState.isPlaying = false;
+                    updateHouseUI();
+                }
+                playTrack(blobUrl, 0, false);
+                updateTrackUI(blobUrl);
+                updateFlagUI(false);
+                updateHouseUI();
+            }
         });
         customGrid.appendChild(btn);
     }
@@ -755,6 +1060,9 @@ uploadZone.addEventListener('drop', e => {
     }
 });
 
+// ============================================================
+// 9. CONTINGENT SONGS (University Songs)
+// ============================================================
 const contingentGrid = document.getElementById('contingentGrid');
 CONTINGENT_SONGS.forEach((path, index) => {
     const btn = document.createElement('button');
@@ -764,13 +1072,29 @@ CONTINGENT_SONGS.forEach((path, index) => {
     if (displayName.length > 25) displayName = displayName.substring(0,23)+'…';
     btn.textContent = `🏳️ ${displayName}`;
     btn.addEventListener('click', () => {
-        sendCommand({ action: 'playContingent', url: path });
+        initAudio();
+        if (isPlaying(path)) {
+            stopTrack(path);
+            btn.classList.remove('btn-playing');
+            updateHouseUI();
+        } else {
+            if (houseState.isPlaying) {
+                const houseItem = currentSources.find(s => s.isHouse);
+                if (houseItem) houseState.time = houseItem.audioEl.currentTime;
+                houseState.isPlaying = false;
+                updateHouseUI();
+            }
+            playTrack(path, 0, false);
+            updateTrackUI(path);
+            updateFlagUI(false);
+            updateHouseUI();
+        }
     });
     contingentGrid.appendChild(btn);
 });
 
 // ============================================================
-// 8. SLIDES (PDF/PNG upload, preview, thumbnails, reorder/delete)
+// 10. SLIDES (PDF/PNG upload, preview, thumbnails, reorder/delete)
 // ============================================================
 let slides = [];
 let currentSlideIndex = 0;
@@ -898,7 +1222,7 @@ function renderSlideThumbnails() {
             if (slides.length) goToSlide(currentSlideIndex);
             else {
                 slidePreviewImg.src = '';
-                sendCommand({ action: 'navigateSlide', index: -1, dataURL: '' });
+                channel.postMessage({ action: 'navigateSlide', index: -1, dataURL: '' });
             }
         });
     });
@@ -912,7 +1236,7 @@ function goToSlide(index) {
     document.querySelectorAll('.slide-thumb').forEach((el, i) => {
         el.classList.toggle('active', i === index);
     });
-    sendCommand({ action: 'navigateSlide', index, dataURL });
+    channel.postMessage({ action: 'navigateSlide', index, dataURL });
 }
 
 slideUploadZone.addEventListener('dragover', e => { e.preventDefault(); slideUploadZone.classList.add('drag-over'); });
@@ -927,19 +1251,16 @@ slideUploadZone.addEventListener('drop', e => {
 });
 
 // ============================================================
-// 9. SLIDE EDITOR – PRE-LOAD LOGOS & TEMPLATE IMAGE
-//    With UNIFORM RESIZE + ASPECT-RATIO-PRESERVING SAVE
+// 11. SLIDE EDITOR (logo placement – unchanged)
 // ============================================================
 const logoGrid = document.getElementById('logoGrid');
 const templateContainer = document.getElementById('templateContainer');
 let templateLogos = [];
 
-// Set template background
 const templateUrl = encodeURI(TEMPLATE_IMAGE);
 templateContainer.style.backgroundImage = `url('${templateUrl}')`;
 templateContainer.style.backgroundColor = '#ffffff';
 
-// Load all logos from LogoIPT folder
 function loadLogos() {
     logoGrid.innerHTML = '';
     LOGO_FILES.forEach((filename) => {
@@ -963,7 +1284,6 @@ function loadLogos() {
     });
 }
 
-// ---------- FIXED: addLogoToTemplate – stores aspect ratio ----------
 function addLogoToTemplate(dataURL) {
     const initialSize = 80;
     const img = new Image();
@@ -989,7 +1309,7 @@ function addLogoToTemplate(dataURL) {
             y: 50,
             width: initialSize,
             height: h,
-            aspect: imgAspect,   // <-- STORE ASPECT RATIO
+            aspect: imgAspect,
             element: logoEl
         };
         templateLogos.push(entry);
@@ -1041,7 +1361,6 @@ function enableDrag(element, entry) {
     }
 }
 
-// ---------- FIXED: enableResize – uniform scaling using aspect ratio ----------
 function enableResize(element, entry) {
     const handle = element.querySelector('.resize-handle');
     if (!handle) return;
@@ -1065,7 +1384,7 @@ function enableResize(element, entry) {
         if (!isResizing) return;
         const dx = e.clientX - startX;
         let newW = Math.max(30, origWidth + dx);
-        let newH = newW / entry.aspect;   // LOCK ASPECT RATIO
+        let newH = newW / entry.aspect;
         entry.width = newW;
         entry.height = newH;
         element.style.width = newW + 'px';
@@ -1086,13 +1405,11 @@ document.getElementById('clearTemplateBtn').addEventListener('click', () => {
     templateLogos = [];
 });
 
-// ---------- FIXED: saveTemplateBtn – canvas draw with proportional boxes ----------
 document.getElementById('saveTemplateBtn').addEventListener('click', async () => {
     const containerRect = templateContainer.getBoundingClientRect();
     const containerW = containerRect.width;
     const containerH = containerRect.height;
 
-    // Load template
     const templateImg = new Image();
     templateImg.crossOrigin = 'anonymous';
     templateImg.src = TEMPLATE_IMAGE;
@@ -1101,13 +1418,11 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
         templateImg.onerror = () => reject('Failed to load template');
     });
 
-    // Canvas
     const canvas = document.createElement('canvas');
     canvas.width = 1920;
     canvas.height = 1080;
     const ctx = canvas.getContext('2d');
 
-    // Draw background – cover fill (no stretching)
     const bgAspect = templateImg.width / templateImg.height;
     const canvasAspect = 1920 / 1080;
     let sx, sy, sw, sh;
@@ -1124,7 +1439,6 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
     }
     ctx.drawImage(templateImg, sx, sy, sw, sh, 0, 0, 1920, 1080);
 
-    // Draw logos – using entry.width/height which are already proportional
     const scaleX = 1920 / containerW;
     const scaleY = 1080 / containerH;
     for (const entry of templateLogos) {
@@ -1145,7 +1459,6 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
         ctx.drawImage(logoImg, left, top, boxW, boxH);
     }
 
-    // Save
     const dataURL = canvas.toDataURL('image/png');
     slides.push(dataURL);
     renderSlideThumbnails();
@@ -1155,7 +1468,7 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
 });
 
 // ============================================================
-// 10. TAB SWITCHING
+// 12. TAB SWITCHING
 // ============================================================
 const tabs = {
     main: document.getElementById('tabMain'),
@@ -1179,12 +1492,15 @@ tabs.contingent.addEventListener('click', () => switchTab('contingent'));
 tabs.slides.addEventListener('click', () => switchTab('slides'));
 
 // ============================================================
-// 11. KEYBOARD SHORTCUTS
+// 13. KEYBOARD SHORTCUTS
 // ============================================================
 document.addEventListener('keydown', (e) => {
     if (e.key === ' ' || e.key === 'Space') {
         e.preventDefault();
-        sendCommand({ action: 'togglePlayPause' });
+        if (activeAudioEl) {
+            if (activeAudioEl.paused) activeAudioEl.play();
+            else activeAudioEl.pause();
+        }
     }
     if (e.key === 'ArrowRight' && slides.length) {
         const next = (currentSlideIndex + 1) % slides.length;
@@ -1197,12 +1513,13 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ============================================================
-// 12. INIT – load logos & check files
+// 14. INIT
 // ============================================================
 console.log('🎤 Presenter Cockpit loading...');
 loadLogos();
 checkAllFiles();
 
+// Auto-unlock audio on first click anywhere (already done above)
 console.log('✅ Ready.');
 </script>
 </body>
