@@ -284,7 +284,6 @@
         .logo-grid {
             display: flex; flex-wrap: wrap; gap: 8px;
         }
-        /* ===== UPDATED: NO BOX, NO BORDER, NO BACKGROUND on logo items ===== */
         .logo-item {
             width: 60px; height: 60px;
             cursor: pointer;
@@ -316,13 +315,11 @@
             background-position: center;
             background-color: white;
         }
-        /* ===== UPDATED: NO BOX, NO BORDER, NO SHADOW on template logos ===== */
+        /* ===== LOGOS ON TEMPLATE – NO BOX, NO BORDER, but now with resize handle ===== */
         .template-logo {
             position: absolute;
             cursor: grab;
             user-select: none;
-            width: 60px;
-            height: 60px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -330,18 +327,38 @@
             transition: transform 0.1s;
         }
         .template-logo:hover {
-            transform: scale(1.05);
+            transform: scale(1.02);
         }
         .template-logo img {
             width: 100%;
             height: 100%;
             object-fit: contain;
             display: block;
+            pointer-events: none; /* so clicks pass through to the container for dragging */
         }
         .template-logo.dragging {
             cursor: grabbing;
             opacity: 0.8;
-            transform: scale(1.1);
+            transform: scale(1.05);
+        }
+        /* Resize handle – appears on hover */
+        .resize-handle {
+            position: absolute;
+            bottom: -4px;
+            right: -4px;
+            width: 14px;
+            height: 14px;
+            background: var(--um-blue);
+            border: 2px solid white;
+            border-radius: 50%;
+            cursor: nwse-resize;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+            z-index: 20;
+            display: none;
+            pointer-events: auto;
+        }
+        .template-logo:hover .resize-handle {
+            display: block;
         }
         .editor-buttons {
             display: flex; gap: 12px; flex-wrap: wrap;
@@ -463,7 +480,7 @@
         <!-- Slide Editor -->
         <div class="section">
             <div class="section-title editor-title">🖌️ Slide Editor</div>
-            <div class="section-sub">Build a custom slide by placing university logos on the template.</div>
+            <div class="section-sub">Click a logo to add it, drag to move, drag the blue dot to resize.</div>
 
             <div class="editor-layout">
                 <!-- Left: Logo Selection -->
@@ -929,6 +946,7 @@ slideUploadZone.addEventListener('drop', e => {
 
 // ============================================================
 // 9. SLIDE EDITOR – PRE-LOAD LOGOS & TEMPLATE IMAGE
+//    With RESIZE + HIGH QUALITY + NO AUTO-JUMP ON SAVE
 // ============================================================
 const logoGrid = document.getElementById('logoGrid');
 const templateContainer = document.getElementById('templateContainer');
@@ -938,7 +956,6 @@ let templateLogos = [];
 const templateUrl = encodeURI(TEMPLATE_IMAGE);
 templateContainer.style.backgroundImage = `url('${templateUrl}')`;
 templateContainer.style.backgroundColor = '#ffffff';
-// If image fails, the container will stay white
 
 // Load all logos from LogoIPT folder
 function loadLogos() {
@@ -964,25 +981,46 @@ function loadLogos() {
     });
 }
 
+// Add logo to template with resize capability and high-res sizing
 function addLogoToTemplate(dataURL) {
+    const initialSize = 80; // bigger default for high quality
+
     const logoEl = document.createElement('div');
     logoEl.className = 'template-logo';
+    // Center it initially
     logoEl.style.left = '50%';
     logoEl.style.top = '50%';
     logoEl.style.transform = 'translate(-50%, -50%)';
-    logoEl.innerHTML = `<img src="${dataURL}" alt="logo" />`;
+    logoEl.style.width = initialSize + 'px';
+    logoEl.style.height = initialSize + 'px';
+    logoEl.innerHTML = `
+        <img src="${dataURL}" alt="logo" />
+        <div class="resize-handle"></div>
+    `;
 
-    const entry = { dataURL, x: 50, y: 50, element: logoEl };
+    const entry = {
+        dataURL,
+        x: 50,
+        y: 50,
+        width: initialSize,
+        height: initialSize,
+        element: logoEl
+    };
     templateLogos.push(entry);
     templateContainer.appendChild(logoEl);
+
     enableDrag(logoEl, entry);
+    enableResize(logoEl, entry);
 }
 
+// Drag logic
 function enableDrag(element, entry) {
     let isDragging = false;
     let startX, startY, origX, origY;
 
     element.addEventListener('mousedown', (e) => {
+        // Ignore if the click is on the resize handle
+        if (e.target.classList.contains('resize-handle')) return;
         e.preventDefault();
         const rect = templateContainer.getBoundingClientRect();
         startX = e.clientX;
@@ -1017,6 +1055,48 @@ function enableDrag(element, entry) {
     }
 }
 
+// Resize logic (drag the blue dot)
+function enableResize(element, entry) {
+    const handle = element.querySelector('.resize-handle');
+    if (!handle) return;
+
+    let isResizing = false;
+    let startX, startY, origWidth, origHeight;
+
+    handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        isResizing = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        origWidth = entry.width;
+        origHeight = entry.height;
+        document.addEventListener('mousemove', onResizeMove);
+        document.addEventListener('mouseup', onResizeUp);
+    });
+
+    function onResizeMove(e) {
+        if (!isResizing) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        // Use the average of dx/dy to keep it roughly proportional, or use dx for width.
+        // We'll use dx for width and dy for height to allow freeform, but let's keep square-ish or independent.
+        let newW = Math.max(30, origWidth + dx);
+        let newH = Math.max(30, origHeight + dy);
+        // Optionally lock aspect ratio? Let's keep independent for flexibility.
+        entry.width = newW;
+        entry.height = newH;
+        element.style.width = newW + 'px';
+        element.style.height = newH + 'px';
+    }
+
+    function onResizeUp() {
+        isResizing = false;
+        document.removeEventListener('mousemove', onResizeMove);
+        document.removeEventListener('mouseup', onResizeUp);
+    }
+}
+
 document.getElementById('clearTemplateBtn').addEventListener('click', () => {
     templateLogos.forEach(entry => {
         if (entry.element.parentNode) entry.element.remove();
@@ -1027,17 +1107,20 @@ document.getElementById('clearTemplateBtn').addEventListener('click', () => {
 document.getElementById('saveTemplateBtn').addEventListener('click', async () => {
     const container = templateContainer;
     try {
+        // HIGH QUALITY: scale 2.5 for crisp 1080p output
         const canvas = await html2canvas(container, {
-            scale: 1.0,
+            scale: 2.5,
             useCORS: true,
             backgroundColor: '#ffffff',
             allowTaint: false,
             logging: false,
+            width: container.scrollWidth,
+            height: container.scrollHeight
         });
         const dataURL = canvas.toDataURL('image/png');
         slides.push(dataURL);
         renderSlideThumbnails();
-        goToSlide(slides.length - 1);
+        // IMPORTANT: Do NOT auto-jump to the new slide. Keep current selection.
         statusEl.textContent = '✅ Template saved as slide #' + slides.length;
         statusEl.style.opacity = '1';
         setTimeout(() => { statusEl.style.opacity = '0.5'; }, 3000);
