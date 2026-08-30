@@ -1153,7 +1153,7 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
     
         // Fixed size: use a percentage of the canvas width (e.g., 5% of 1920 = 96px)
         // This keeps all logos the same size regardless of how they were resized in the editor.
-        const fixedSize = 1920 * 0.06; // 6% of canvas width – adjust this number to your liking
+        const fixedSize = 1920 * 0.1; // 6% of canvas width – adjust this number to your liking
         let drawW, drawH;
         if (imgAspect > 1) {
             drawW = fixedSize;
