@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>📺 Projector View</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: #0b1120;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    #slide-display {
+      width: 96vw;
+      height: 94vh;
+      background: #0f172a;
+      border-radius: 32px;
+      border: 2px solid #1e293b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      box-shadow: 0 25px 50px -12px black;
+    }
+    #slide-display img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 16px;
+    }
+    /* Hidden audio player */
+    #bg-music {
+      display: none;
+    }
+    /* Tiny indicator that the system is live (optional) */
+    .status {
+      position: fixed;
+      bottom: 16px;
+      right: 24px;
+      color: #1e293b;
+      font-size: 0.8rem;
+      font-family: monospace;
+      letter-spacing: 1px;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="slide-display">
+    <img id="public-slide" src="" alt="Current slide" />
+  </div>
+
+  <audio id="bg-music" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" loop></audio>
+
+  <div class="status">🔗 HDMI LIVE</div>
+
+  <script>
+    const slideImg = document.getElementById('public-slide');
+    const audio = document.getElementById('bg-music');
+
+    // Listen to the presenter's commands
+    const channel = new BroadcastChannel('presenter_hdmi');
+
+    channel.onmessage = (event) => {
+      const data = event.data;
+
+      // --- Slide navigation ---
+      if (data.action === 'navigate') {
+        slideImg.src = data.dataURL;
+        // Update the browser tab title so you know which slide is showing
+        document.title = `📺 Slide ${data.index + 1}`;
+      }
+
+      // --- Music controls ---
+      if (data.action === 'play') {
+        audio.play().catch(() => {});
+      }
+      if (data.action === 'pause') {
+        audio.pause();
+      }
+      if (data.action === 'next') {
+        // You can change the src here if you want dynamic playlists
+        // For now, just restart the current track
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+      }
+      if (data.action === 'volume') {
+        audio.volume = data.value;
+      }
+    };
+
+    // Auto-play music when the page loads (if allowed by browser)
+    // Many browsers block autoplay, so we wait for a user click on the presenter side.
+    // The presenter will send a 'play' command anyway.
+
+    console.log('📺 Projector ready. Waiting for presenter...');
+  </script>
+</body>
+</html>

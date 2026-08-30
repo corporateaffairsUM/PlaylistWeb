@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>🎤 Presenter Dashboard</title>
+  <!-- PDF.js for reading PDFs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js">
+  </script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: #0b1120;
+      color: #e2e8f0;
+      font-family: system-ui, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      gap: 16px;
+      overflow: hidden;
+    }
+
+    /* Top bar: Upload + Music */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-shrink: 0;
+      background: #1e293b;
+      padding: 12px 20px;
+      border-radius: 16px;
+      flex-wrap: wrap;
+    }
+    .file-label {
+      background: #3b82f6;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: 0.2s;
+    }
+    .file-label:hover {
+      background: #2563eb;
+    }
+    #file-upload {
+      display: none;
+    }
+    .music-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-left: auto;
+    }
+    .music-group button {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #f1f5f9;
+      font-size: 1.4rem;
+      padding: 4px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .music-group button:hover {
+      background: #334155;
+    }
+    .music-group .play-btn {
+      background: #22c55e;
+      border-color: #22c55e;
+    }
+    .music-group .play-btn:hover {
+      background: #16a34a;
+    }
+
+    /* Main body: Preview + Thumbnails */
+    .main-area {
+      display: flex;
+      flex: 1;
+      gap: 16px;
+      min-height: 0;
+    }
+
+    /* Preview (mirrors the projector exactly) */
+    .preview-wrapper {
+      flex: 1;
+      background: #0f172a;
+      border-radius: 20px;
+      border: 2px solid #1e293b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+    .preview-wrapper img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 12px;
+    }
+    .preview-label {
+      position: absolute;
+      bottom: 12px;
+      right: 16px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      pointer-events: none;
+    }
+
+    /* Thumbnail strip */
+    .thumbnails {
+      width: 200px;
+      background: #1e293b;
+      border-radius: 20px;
+      padding: 12px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .thumbnails h4 {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+    .thumb-item {
+      border-radius: 10px;
+      overflow: hidden;
+      cursor: pointer;
+      border: 3px solid transparent;
+      transition: 0.2s;
+      background: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      aspect-ratio: 16/9;
+    }
+    .thumb-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .thumb-item.active {
+      border-color: #3b82f6;
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+    }
+    .thumb-item:hover {
+      border-color: #64748b;
+    }
+    .empty-thumbs {
+      color: #475569;
+      font-size: 0.9rem;
+      text-align: center;
+      padding: 30px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <label class="file-label" for="file-upload">📂 Upload PNG/JPEG/PDF</label>
+    <input type="file" id="file-upload" multiple accept="image/*,application/pdf" />
+    <span style="font-size:0.85rem;color:#94a3b8;" id="slide-count">0 slides loaded</span>
+
+    <div class="music-group">
+      <span style="font-size:0.85rem;">🎵</span>
+      <button class="play-btn" id="playBtn">▶</button>
+      <button id="pauseBtn">⏸</button>
+      <button id="nextBtn">⏭</button>
+      <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="0.8" style="width:80px;" />
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main-area">
+    <!-- Preview (mirror) -->
+    <div class="preview-wrapper">
+      <img id="preview-img" src="" alt="Slide preview" />
+      <span class="preview-label">👀 Presenter Preview</span>
+    </div>
+
+    <!-- Thumbnails -->
+    <div class="thumbnails">
+      <h4>📋 Slides</h4>
+      <div id="thumb-list">
+        <div class="empty-thumbs">Upload slides to begin</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden audio element (controls music on the projector page via channel) -->
+  <audio id="bg-music" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" loop></audio>
+
+  <script>
+    // -------- CONFIG --------
+    const channel = new BroadcastChannel('presenter_hdmi');
+    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    // -------- STATE --------
+    let slides = []; // array of dataURL strings
+    let currentIndex = 0;
+
+    // DOM refs
+    const thumbList = document.getElementById('thumb-list');
+    const previewImg = document.getElementById('preview-img');
+    const slideCount = document.getElementById('slide-count');
+    const fileInput = document.getElementById('file-upload');
+    const audio = document.getElementById('bg-music');
+
+    // -------- FILE UPLOAD (PNG/JPEG/PDF) --------
+    fileInput.addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files);
+      if (!files.length) return;
+
+      for (const file of files) {
+        if (file.type === 'application/pdf') {
+          await handlePDF(file);
+        } else if (file.type.startsWith('image/')) {
+          await handleImage(file);
+        }
+      }
+      fileInput.value = ''; // reset
+      renderThumbnails();
+      if (slides.length) goTo(0);
+    });
+
+    function handleImage(file) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          slides.push(e.target.result);
+          resolve();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function handlePDF(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const totalPages = pdf.numPages;
+
+      for (let i = 1; i <= totalPages; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        slides.push(canvas.toDataURL('image/png'));
+      }
+    }
+
+    // -------- RENDER THUMBNAILS --------
+    function renderThumbnails() {
+      slideCount.textContent = `${slides.length} slides loaded`;
+      if (!slides.length) {
+        thumbList.innerHTML = `<div class="empty-thumbs">Upload slides to begin</div>`;
+        previewImg.src = '';
+        return;
+      }
+
+      let html = '';
+      slides.forEach((dataURL, idx) => {
+        const active = idx === currentIndex ? 'active' : '';
+        html += `
+            <div class="thumb-item ${active}" data-index="${idx}">
+              <img src="${dataURL}" alt="Slide ${idx+1}" />
+            </div>
+          `;
+      });
+      thumbList.innerHTML = html;
+
+      // Click to navigate
+      document.querySelectorAll('.thumb-item').forEach((el) => {
+        el.addEventListener('click', () => {
+          const idx = parseInt(el.dataset.index);
+          if (idx !== currentIndex) goTo(idx);
+        });
+      });
+    }
+
+    // -------- NAVIGATE (updates preview AND projector) --------
+    function goTo(index) {
+      if (index < 0 || index >= slides.length) return;
+      currentIndex = index;
+      const dataURL = slides[index];
+
+      // 1. Update preview (laptop)
+      previewImg.src = dataURL;
+
+      // 2. Update thumbnails highlight
+      document.querySelectorAll('.thumb-item').forEach((el, i) => {
+        el.classList.toggle('active', i === index);
+      });
+
+      // 3. Send to the projector (HDMI public window)
+      channel.postMessage({
+        action: 'navigate',
+        index: index,
+        dataURL: dataURL
+      });
+    }
+
+    // -------- MUSIC CONTROLS (send to projector) --------
+    document.getElementById('playBtn').addEventListener('click', () => {
+      channel.postMessage({ action: 'play' });
+    });
+    document.getElementById('pauseBtn').addEventListener('click', () => {
+      channel.postMessage({ action: 'pause' });
+    });
+    document.getElementById('nextBtn').addEventListener('click', () => {
+      channel.postMessage({ action: 'next' });
+    });
+    document.getElementById('volumeSlider').addEventListener('input', (e) => {
+      channel.postMessage({ action: 'volume', value: parseFloat(e.target.value) });
+    });
+
+    // Keyboard shortcuts (so you never need to click)
+    document.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.key === 'Space') {
+        e.preventDefault();
+        channel.postMessage({ action: 'play' });
+      }
+      if (e.key === 'ArrowRight' && slides.length) {
+        const next = (currentIndex + 1) % slides.length;
+        goTo(next);
+      }
+      if (e.key === 'ArrowLeft' && slides.length) {
+        const prev = (currentIndex - 1 + slides.length) % slides.length;
+        goTo(prev);
+      }
+    });
+
+    // Initial state
+    renderThumbnails();
+
+    // Optional: send current slide to projector if it reconnects
+    // But the projector will load fresh, so we send on first interaction.
+    console.log('🎤 Presenter ready. Upload slides, then click a thumbnail.');
+  </script>
+</body>
+</html>
