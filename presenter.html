@@ -150,7 +150,8 @@
         .btn-house:hover { transform: translateY(-2px); box-shadow: 0 6px 0 #002266, var(--shadow-lg); }
         .btn-custom { background: linear-gradient(135deg, #2d2d44, #1a1a2e); box-shadow: 0 4px 0 #0d0d17, var(--shadow-sm); }
         .btn-custom:hover { transform: translateY(-2px); box-shadow: 0 6px 0 #0d0d17, var(--shadow-lg); }
-        .btn-contingent { background: linear-gradient(135deg, #800000, #cc0000); box-shadow: 0 4px 0 #4d0000, var(--shadow-sm); }
+        .btn-contingent { background: linear-gradient(135deg, #800000, #cc0000); box-shadow: 0 4px 0 #4d0000, var(--shadow-sm); display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+        .btn-contingent img { height: 26px; width: 26px; object-fit: contain; background: #fff; border-radius: 6px; padding: 2px; }
         .btn-contingent:hover { transform: translateY(-2px); box-shadow: 0 6px 0 #4d0000, var(--shadow-lg); }
         .btn-slide { background: linear-gradient(135deg, #2d3748, #1a202c); box-shadow: 0 4px 0 #0d1117, var(--shadow-sm); }
         .btn-slide:hover { transform: translateY(-2px); box-shadow: 0 6px 0 #0d1117, var(--shadow-lg); }
@@ -1136,7 +1137,7 @@ TEAMS.filter(t => t.anthem).forEach(t => {
     btn.className = 'btn btn-contingent';
     btn.dataset.url = './' + t.anthem;
     btn.title = t.name;
-    btn.textContent = `🏳️ ${t.short}`;
+    btn.innerHTML = `<img src="${t.logo}" alt="">${t.short}`;
     btn.addEventListener('click', () => playUniversitySong('./' + t.anthem));
     contingentGrid.appendChild(btn);
 });
