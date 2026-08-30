@@ -14,9 +14,8 @@
     <title>SUKIPT 2026 - Presenter Cockpit</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏃</text></svg>" />
     <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Oswald:wght@400;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
-        /* ===== ALL STYLES (unchanged – exactly as before) ===== */
+        /* ===== ALL STYLES (unchanged) ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
             --um-blue: #0033a0; --um-blue-light: #0066cc;
@@ -480,7 +479,7 @@
 
         <div class="section">
             <div class="section-title editor-title">🖌️ Slide Editor</div>
-            <div class="section-sub">Click a logo to add it, drag to move, drag the blue dot to resize.</div>
+            <div class="section-sub">Click a logo to add it, drag to move, drag the blue dot to resize (aspect‑ratio locked).</div>
 
             <div class="editor-layout">
                 <div class="logo-panel">
@@ -938,7 +937,7 @@ slideUploadZone.addEventListener('drop', e => {
 
 // ============================================================
 // 9. SLIDE EDITOR – PRE-LOAD LOGOS & TEMPLATE IMAGE
-//    With RESIZE + HIGH QUALITY + NO AUTO-JUMP ON SAVE
+//    With UNIFORM RESIZE + ASPECT-RATIO-PRESERVING SAVE
 // ============================================================
 const logoGrid = document.getElementById('logoGrid');
 const templateContainer = document.getElementById('templateContainer');
@@ -973,35 +972,42 @@ function loadLogos() {
     });
 }
 
-// Add logo to template with resize capability
+// ---------- FIXED: addLogoToTemplate – stores aspect ratio ----------
 function addLogoToTemplate(dataURL) {
     const initialSize = 80;
+    const img = new Image();
+    img.onload = function() {
+        const imgAspect = img.width / img.height;
 
-    const logoEl = document.createElement('div');
-    logoEl.className = 'template-logo';
-    logoEl.style.left = '50%';
-    logoEl.style.top = '50%';
-    logoEl.style.transform = 'translate(-50%, -50%)';
-    logoEl.style.width = initialSize + 'px';
-    logoEl.style.height = initialSize + 'px';
-    logoEl.innerHTML = `
-        <img src="${dataURL}" alt="logo" />
-        <div class="resize-handle"></div>
-    `;
+        const logoEl = document.createElement('div');
+        logoEl.className = 'template-logo';
+        logoEl.style.left = '50%';
+        logoEl.style.top = '50%';
+        logoEl.style.transform = 'translate(-50%, -50%)';
+        const h = initialSize / imgAspect;
+        logoEl.style.width = initialSize + 'px';
+        logoEl.style.height = h + 'px';
+        logoEl.innerHTML = `
+            <img src="${dataURL}" alt="logo" />
+            <div class="resize-handle"></div>
+        `;
 
-    const entry = {
-        dataURL,
-        x: 50,
-        y: 50,
-        width: initialSize,
-        height: initialSize,
-        element: logoEl
+        const entry = {
+            dataURL,
+            x: 50,
+            y: 50,
+            width: initialSize,
+            height: h,
+            aspect: imgAspect,   // <-- STORE ASPECT RATIO
+            element: logoEl
+        };
+        templateLogos.push(entry);
+        templateContainer.appendChild(logoEl);
+
+        enableDrag(logoEl, entry);
+        enableResize(logoEl, entry);
     };
-    templateLogos.push(entry);
-    templateContainer.appendChild(logoEl);
-
-    enableDrag(logoEl, entry);
-    enableResize(logoEl, entry);
+    img.src = dataURL;
 }
 
 function enableDrag(element, entry) {
@@ -1044,6 +1050,7 @@ function enableDrag(element, entry) {
     }
 }
 
+// ---------- FIXED: enableResize – uniform scaling using aspect ratio ----------
 function enableResize(element, entry) {
     const handle = element.querySelector('.resize-handle');
     if (!handle) return;
@@ -1066,9 +1073,8 @@ function enableResize(element, entry) {
     function onResizeMove(e) {
         if (!isResizing) return;
         const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
         let newW = Math.max(30, origWidth + dx);
-        let newH = Math.max(30, origHeight + dy);
+        let newH = newW / entry.aspect;   // LOCK ASPECT RATIO
         entry.width = newW;
         entry.height = newH;
         element.style.width = newW + 'px';
@@ -1089,43 +1095,37 @@ document.getElementById('clearTemplateBtn').addEventListener('click', () => {
     templateLogos = [];
 });
 
-// ========== NEW CANVAS-BASED SAVE: NO STRETCHING ==========
+// ---------- FIXED: saveTemplateBtn – canvas draw with proportional boxes ----------
 document.getElementById('saveTemplateBtn').addEventListener('click', async () => {
-    // 1. Get the container's current size (for scaling logo sizes)
     const containerRect = templateContainer.getBoundingClientRect();
     const containerW = containerRect.width;
     const containerH = containerRect.height;
 
-    // 2. Load the template image
+    // Load template
     const templateImg = new Image();
     templateImg.crossOrigin = 'anonymous';
-    templateImg.src = TEMPLATE_IMAGE; // relative path, will be resolved
-
+    templateImg.src = TEMPLATE_IMAGE;
     await new Promise((resolve, reject) => {
         templateImg.onload = resolve;
-        templateImg.onerror = () => reject('Failed to load template image');
+        templateImg.onerror = () => reject('Failed to load template');
     });
 
-    // 3. Create a 1920x1080 canvas
+    // Canvas
     const canvas = document.createElement('canvas');
     canvas.width = 1920;
     canvas.height = 1080;
     const ctx = canvas.getContext('2d');
 
-    // 4. Draw the background – fill entire canvas (aspect ratio may differ, but we want to fill)
-    //    If the template image is not 16:9, we could preserve aspect ratio with "contain" or "cover".
-    //    We'll use "cover" by drawing to cover the canvas.
+    // Draw background – cover fill (no stretching)
     const bgAspect = templateImg.width / templateImg.height;
-    const canvasAspect = 1920 / 1080; // 1.777...
+    const canvasAspect = 1920 / 1080;
     let sx, sy, sw, sh;
     if (bgAspect > canvasAspect) {
-        // Image is wider than canvas: crop sides
         sw = templateImg.height * canvasAspect;
         sh = templateImg.height;
         sx = (templateImg.width - sw) / 2;
         sy = 0;
     } else {
-        // Image is taller: crop top/bottom
         sw = templateImg.width;
         sh = templateImg.width / canvasAspect;
         sx = 0;
@@ -1133,7 +1133,9 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
     }
     ctx.drawImage(templateImg, sx, sy, sw, sh, 0, 0, 1920, 1080);
 
-    // ========== LOGO DRAWING – ASPECT RATIO LOCKED ==========
+    // Draw logos – using entry.width/height which are already proportional
+    const scaleX = 1920 / containerW;
+    const scaleY = 1080 / containerH;
     for (const entry of templateLogos) {
         const logoImg = new Image();
         logoImg.src = entry.dataURL;
@@ -1141,27 +1143,21 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
             logoImg.onload = resolve;
             logoImg.onerror = () => reject('Failed to load logo');
         });
-    
-        // Calculate scale from container to 1920x1080
-        const scale = 1920 / containerW; // Same scale for width and height
-    
-        const boxW = entry.width * scale;
-        const boxH = entry.height * scale; // Because entry.width/entry.height matches the aspect ratio
-    
+
+        const boxW = entry.width * scaleX;
+        const boxH = entry.height * scaleY;
         const centerX = (entry.x / 100) * 1920;
         const centerY = (entry.y / 100) * 1080;
         const left = centerX - boxW / 2;
         const top = centerY - boxH / 2;
-    
-        // Draw – no stretching because boxW/boxH has the exact same aspect ratio as the logo
+
         ctx.drawImage(logoImg, left, top, boxW, boxH);
     }
 
-    // 6. Export as PNG and add to slides
+    // Save
     const dataURL = canvas.toDataURL('image/png');
     slides.push(dataURL);
     renderSlideThumbnails();
-    // Keep current slide – do NOT jump
     statusEl.textContent = '✅ Template saved as slide #' + slides.length;
     statusEl.style.opacity = '1';
     setTimeout(() => { statusEl.style.opacity = '0.5'; }, 3000);
