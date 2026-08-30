@@ -3,6 +3,14 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="
+        script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com;
+        worker-src 'self' blob:;
+        connect-src 'self' https:;
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+        font-src https://fonts.gstatic.com;
+        img-src 'self' data: blob:;
+    ">
     <title>SUKIPT 2026 - Projector</title>
     <style>
         /* RESET EVERYTHING – NO BORDERS, NO MARGINS */
@@ -12,15 +20,13 @@
             box-sizing: border-box;
         }
         body {
-            background: #000000; /* Pure black */
+            background: #000000;
             height: 100vh;
             width: 100vw;
             overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-family: sans-serif;
-            /* Remove any default user-agent styles */
             margin: 0;
             padding: 0;
         }
@@ -32,7 +38,6 @@
             align-items: center;
             justify-content: center;
             overflow: hidden;
-            /* NO border, NO border-radius */
             border: none;
             border-radius: 0;
             box-shadow: none;
@@ -40,9 +45,8 @@
         #slide-display img {
             width: 100%;
             height: 100%;
-            object-fit: contain; /* Keeps aspect ratio, letterboxes with black */
+            object-fit: contain;
             display: block;
-            /* NO border, NO padding */
             border: none;
             border-radius: 0;
         }
@@ -85,7 +89,7 @@
             50% { transform: scale(1.05); }
         }
 
-        /* Tiny error toast (only shows if file missing) */
+        /* Error toast (shows if a song file is missing) */
         #error-toast {
             position: fixed;
             bottom: 30px;
@@ -117,12 +121,12 @@
         <p style="font-size:0.9rem; opacity:0.4; margin-top:20px;">(Required for browser autoplay policy)</p>
     </div>
 
-    <!-- SLIDE DISPLAY – PURE FULLSCREEN -->
+    <!-- SLIDE DISPLAY -->
     <div id="slide-display">
         <img id="public-slide" src="" alt="Current slide" />
     </div>
 
-    <!-- ERROR TOAST (shows if a song fails to load) -->
+    <!-- ERROR TOAST -->
     <div id="error-toast"></div>
 
     <script>
@@ -197,7 +201,6 @@
 
         function unlockAudio() {
             if (isAudioUnlocked) return;
-            // Create and resume AudioContext
             if (!audioCtx) {
                 audioCtx = new(window.AudioContext || window.webkitAudioContext)();
                 masterGain = audioCtx.createGain();
@@ -227,7 +230,6 @@
                 audioCtx.resume();
             }
             if (!isAudioUnlocked) {
-                // If overlay still visible, force unlock
                 isAudioUnlocked = true;
                 overlay.classList.add('hidden');
             }
@@ -272,13 +274,11 @@
             audioEl.preload = 'auto';
             audioEl.currentTime = startTime;
 
-            // ERROR HANDLING – if file not found
             audioEl.onerror = (e) => {
                 const errMsg = `❌ Failed to load: ${url.split('/').pop()}`;
                 console.error(errMsg, e);
                 showError(errMsg);
                 sendStatus(errMsg);
-                // Remove this item from sources if it was added
                 const idx = currentSources.findIndex(s => s.audioEl === audioEl);
                 if (idx !== -1) {
                     currentSources.splice(idx, 1);
@@ -420,9 +420,6 @@
             }
         }
 
-        // ============================================================
-        // 7. UI HELPERS (Error Toast)
-        // ============================================================
         function showError(msg) {
             errorToast.textContent = msg;
             errorToast.classList.add('show');
@@ -433,21 +430,16 @@
         }
 
         // ============================================================
-        // 8. SEND STATUS TO PRESENTER
+        // 7. SEND STATUS TO PRESENTER
         // ============================================================
         function sendStatus(msg) { channel.postMessage({ type: 'status', msg }); }
-
         function sendNowPlaying(label) { channel.postMessage({ type: 'nowPlaying', label }); }
-
         function sendTrackPlaying(url) { channel.postMessage({ type: 'trackPlaying', url: url || null }); }
-
         function sendFlagState(isPlaying) { channel.postMessage({ type: 'flagState', isPlaying }); }
-
         function sendHouseState() {
             channel.postMessage({ type: 'houseState', isPlaying: houseState.isPlaying, index: houseState.index,
                 time: houseState.time });
         }
-
         function updateProgressBar() {
             if (activeAudioEl && !isNaN(activeAudioEl.duration) && activeAudioEl.duration > 0) {
                 channel.postMessage({ type: 'progress', currentTime: activeAudioEl.currentTime, duration: activeAudioEl
@@ -458,14 +450,13 @@
         }
 
         // ============================================================
-        // 9. COMMAND HANDLER
+        // 8. COMMAND HANDLER
         // ============================================================
         channel.onmessage = (event) => {
             const data = event.data;
             if (!data) return;
             const action = data.action;
 
-            // Auto-unlock if command arrives and not unlocked (safety)
             if (!isAudioUnlocked) unlockAudio();
 
             switch (action) {
@@ -581,7 +572,7 @@
         };
 
         // ============================================================
-        // 10. INIT
+        // 9. INIT
         // ============================================================
         sendNowPlaying('Ready');
         sendStatus('Waiting for presenter... Click screen to enable audio.');
