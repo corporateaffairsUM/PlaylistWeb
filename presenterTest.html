@@ -439,7 +439,45 @@
         .btn-anthem { background:linear-gradient(135deg,var(--um-gold),var(--um-gold-dark)); color:var(--um-black); box-shadow:0 4px 0 #b8960f, var(--shadow-sm); }
         .btn-save-slide { background:linear-gradient(135deg,#4338ca,#3730a3); box-shadow:0 4px 0 #1e1b7a, var(--shadow-sm); }
         .btn-save-slide:hover { transform:translateY(-2px); box-shadow:0 6px 0 #1e1b7a, var(--shadow-lg); }
+        .btn-backdrop-slide { background:linear-gradient(135deg,#0d9488,#0f766e); box-shadow:0 4px 0 #0d5e56, var(--shadow-sm); }
+        .btn-backdrop-slide:hover { transform:translateY(-2px); box-shadow:0 6px 0 #0d5e56, var(--shadow-lg); }
         @media (max-width:900px) { .medal-boxes, .medal-boxes.tie { grid-template-columns:1fr 1fr; } }
+
+        /* MUSIC PROMPT MODAL */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7); z-index: 10000;
+            display: none; align-items: center; justify-content: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-box {
+            background: white; border-radius: 24px; padding: 40px; max-width: 500px; width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            font-family: 'Oswald', sans-serif;
+        }
+        .modal-box h2 { font-family: 'Bangers', cursive; font-size: 2rem; margin-bottom: 8px; color: #1a1a2e; }
+        .modal-box p { font-size: 1.1rem; opacity: 0.7; margin-bottom: 20px; }
+        .modal-box .modal-options { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+        .modal-box .modal-options label {
+            display: flex; align-items: center; gap: 14px;
+            padding: 14px 18px; border-radius: 12px; border: 2px solid #e2e8f0;
+            cursor: pointer; font-size: 1.1rem; font-weight: 600; transition: 0.2s;
+        }
+        .modal-box .modal-options label:hover { border-color: var(--um-blue); background: #f0f4ff; }
+        .modal-box .modal-options label input[type="radio"] { width: 18px; height: 18px; accent-color: var(--um-blue); }
+        .modal-box .modal-options label .label-desc { font-weight: 400; opacity: 0.6; font-size: 0.9rem; margin-left: 4px; }
+        .modal-box .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+        .modal-box .modal-actions button {
+            padding: 12px 32px; border: none; border-radius: 50px;
+            font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 1.1rem;
+            letter-spacing: 1px; text-transform: uppercase; cursor: pointer;
+            transition: 0.2s;
+        }
+        .modal-box .modal-actions .btn-confirm { background: var(--um-blue); color: white; }
+        .modal-box .modal-actions .btn-confirm:hover { background: #002266; transform: scale(1.02); }
+        .modal-box .modal-actions .btn-cancel { background: #e2e8f0; color: #1a1a2e; }
+        .modal-box .modal-actions .btn-cancel:hover { background: #cbd5e1; }
+        .modal-box .uni-name-highlight { color: var(--um-red); font-weight: 700; }
     </style>
 </head>
 <body>
@@ -456,7 +494,6 @@
         <button class="tab-btn active" id="tabMedal">🏅 Medal + Slides</button>
         <button class="tab-btn" id="tabMain">🎧 Main Control</button>
         <button class="tab-btn" id="tabContingent">🏳️ University Songs</button>
-        <!-- Slides tab removed – now integrated into Medal tab -->
     </div>
 
     <!-- ======= TAB 0: MEDAL SLIDE + SLIDES MANAGER ======= -->
@@ -476,6 +513,7 @@
             <div class="tie-row song-row">🎵 Song when shown:
                 <label><input type="radio" name="showSong" value="anthem" checked> Champion's anthem</label>
                 <label><input type="radio" name="showSong" value="sukipt"> LAGU SUKIPT</label>
+                <label><input type="radio" name="showSong" value="none"> No Music</label>
             </div>
             <div class="medal-preview"><canvas id="medalCanvas" width="1920" height="1080"></canvas></div>
             <div class="medal-actions">
@@ -483,11 +521,12 @@
                 <button class="btn btn-anthem" id="medalAnthemBtn" disabled>▶ Lagu Juara</button>
                 <button class="btn btn-show" id="backdropBtn">🖼️ Backdrop</button>
                 <button class="btn btn-save-slide" id="saveMedalSlideBtn">💾 Save Slide</button>
+                <button class="btn btn-backdrop-slide" id="addBackdropSlideBtn">🖼️ Add Backdrop to Slides</button>
                 <button class="btn btn-editor" id="medalClearBtn">🧹 Clear all</button>
             </div>
         </div>
 
-        <!-- ===== SLIDES MANAGER (moved from old Slides tab) ===== -->
+        <!-- ===== SLIDES MANAGER ===== -->
         <div class="section">
             <div class="section-title slides-title">🖼️ Slides Manager</div>
             <div class="section-sub">Upload PDF or PNG/JPEG to build your presentation. Click a thumbnail to preview locally, then press <strong>Present this slide</strong> or the ▶ on any thumbnail to send to projector.</div>
@@ -571,6 +610,23 @@
 
 </div>
 
+<!-- ===== MUSIC PROMPT MODAL ===== -->
+<div class="modal-overlay" id="musicPromptModal">
+    <div class="modal-box">
+        <h2>🎵 Choose Music</h2>
+        <p id="modalPromptText">Select which song to play with this slide:</p>
+        <div class="modal-options" id="modalOptions">
+            <label><input type="radio" name="modalSong" value="anthem" checked> <span id="modalAnthemLabel">🎵 Lagu Universiti</span> <span class="label-desc">(champion's anthem)</span></label>
+            <label><input type="radio" name="modalSong" value="sukipt"> 🏴 LAGU SUKIPT <span class="label-desc">(official SUKIPT song)</span></label>
+            <label><input type="radio" name="modalSong" value="none"> 🔇 No Music</label>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-cancel" id="modalCancelBtn">Cancel</button>
+            <button class="btn-confirm" id="modalConfirmBtn">Present</button>
+        </div>
+    </div>
+</div>
+
 <script>
 // ============================================================
 // 1. DEFINE SONG LISTS & LOGO LIST
@@ -605,9 +661,10 @@ const LOGO_FILES = [
     'UTM.png', 'UTP.png', 'UUM.png', 'Xiamen.png'
 ];
 const TEMPLATE_IMAGE = 'Template Majlis Sukipt.png';
+const BACKDROP_IMAGE = 'Sukipt7 Main Backdrop.png';
 
 // ============================================================
-// 2. FILE CHECKER (unchanged)
+// 2. FILE CHECKER
 // ============================================================
 async function checkFileExists(url) {
     try {
@@ -622,7 +679,7 @@ async function checkAllFiles() {
     if (location.protocol === 'file:') return;
     const allSongs = [FLAG_SONG, ...HOUSE_SONGS, ...CONTINGENT_SONGS];
     const allLogos = LOGO_FILES.map(f => `LogoIPT/${f}`);
-    const allFiles = [...allSongs, ...allLogos, TEMPLATE_IMAGE];
+    const allFiles = [...allSongs, ...allLogos, TEMPLATE_IMAGE, BACKDROP_IMAGE];
     const results = await Promise.all(allFiles.map(async (url) => {
         const exists = await checkFileExists(url);
         return { url, exists };
@@ -657,9 +714,8 @@ const volumeSlider = document.getElementById('volumeSlider');
 const volDisplay = document.getElementById('volDisplay');
 
 // ============================================================
-// 5. FULL AUDIO ENGINE – UNCHANGED (copied from your original)
+// 5. FULL AUDIO ENGINE – UNCHANGED
 // ============================================================
-// [All audio engine code is exactly as you had – no changes]
 let audioCtx = null;
 let masterGain = null;
 const FILE_MODE = location.protocol === 'file:';
@@ -914,7 +970,7 @@ function formatTime(seconds) {
 }
 
 // ============================================================
-// 6. UI UPDATE FUNCTIONS (unchanged)
+// 6. UI UPDATE FUNCTIONS
 // ============================================================
 function updateTrackUI(url) {
     document.querySelectorAll('.btn-playing').forEach(b => b.classList.remove('btn-playing'));
@@ -1057,7 +1113,7 @@ progressSlider.addEventListener('input', (e) => {
 });
 
 // ============================================================
-// 8. CUSTOM UPLOADS (unchanged)
+// 8. CUSTOM UPLOADS
 // ============================================================
 const fileInput = document.getElementById('fileInput');
 const customGrid = document.getElementById('customGrid');
@@ -1110,7 +1166,7 @@ uploadZone.addEventListener('drop', e => {
 });
 
 // ============================================================
-// 9. CONTINGENT SONGS (unchanged)
+// 9. CONTINGENT SONGS
 // ============================================================
 const contingentGrid = document.getElementById('contingentGrid');
 function playUniversitySong(path) {
@@ -1142,7 +1198,7 @@ TEAMS.filter(t => t.anthem).forEach(t => {
 });
 
 // ============================================================
-// 10. SLIDES (modified: local preview only, plus Present button)
+// 10. SLIDES (with music prompt on present)
 // ============================================================
 let slides = [];
 let currentSlideIndex = 0;
@@ -1153,6 +1209,17 @@ const slideCount = document.getElementById('slideCount');
 const slidePreviewImg = document.getElementById('slidePreviewImg');
 const slideThumbList = document.getElementById('slideThumbList');
 const presentSlideBtn = document.getElementById('presentSlideBtn');
+
+// Modal elements
+const modal = document.getElementById('musicPromptModal');
+const modalPromptText = document.getElementById('modalPromptText');
+const modalAnthemLabel = document.getElementById('modalAnthemLabel');
+const modalConfirmBtn = document.getElementById('modalConfirmBtn');
+const modalCancelBtn = document.getElementById('modalCancelBtn');
+const modalOptions = document.getElementById('modalOptions');
+
+let pendingPresentIndex = null;
+let pendingPresentDataURL = null;
 
 const script = document.createElement('script');
 script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
@@ -1174,7 +1241,6 @@ slideFileInput.addEventListener('change', async (e) => {
     slideFileInput.value = '';
     renderSlideThumbnails();
     if (slides.length) {
-        // Preview first slide locally, but do NOT send to projector
         goToSlide(0);
     }
 });
@@ -1230,17 +1296,14 @@ function renderSlideThumbnails() {
     });
     slideThumbList.innerHTML = html;
 
-    // Click on thumb → local preview only (no auto-present)
     document.querySelectorAll('.slide-thumb').forEach(el => {
         const idx = parseInt(el.dataset.index);
         el.addEventListener('click', (e) => {
             if (e.target.closest('.slide-thumb-actions')) return;
-            // Local preview only
             goToSlide(idx);
         });
     });
 
-    // Move up
     document.querySelectorAll('.move-up').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1255,7 +1318,6 @@ function renderSlideThumbnails() {
         });
     });
 
-    // Move down
     document.querySelectorAll('.move-down').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1270,16 +1332,14 @@ function renderSlideThumbnails() {
         });
     });
 
-    // Present button on each thumb
     document.querySelectorAll('.present-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             const idx = parseInt(btn.dataset.index);
-            presentSlide(idx);
+            handlePresentClick(idx);
         });
     });
 
-    // Delete
     document.querySelectorAll('.del-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1299,7 +1359,6 @@ function renderSlideThumbnails() {
     presentSlideBtn.disabled = false;
 }
 
-// Local preview – does NOT send to projector
 function goToSlide(index) {
     if (index < 0 || index >= slides.length) return;
     currentSlideIndex = index;
@@ -1310,19 +1369,167 @@ function goToSlide(index) {
     });
 }
 
-// Present the currently selected slide to the projector
-function presentSlide(index) {
+// ===== MUSIC PROMPT LOGIC =====
+function isBackdropSlide(dataURL) {
+    // Check if this is the backdrop image (by data URL or by checking if it contains the backdrop image data)
+    // We'll check if it's the backdrop by checking if the data URL matches the backdrop image
+    // Since we can't compare data URLs reliably, we'll check if the slide was added via "Add Backdrop to Slides"
+    // which stores a marker, or we check the content.
+    // Simple approach: if the slide data URL starts with "data:image/png;base64," and is the backdrop,
+    // we can't easily detect. So we'll use a flag stored with the slide.
+    // We'll store metadata in a separate array.
+    return false; // We'll use the metadata approach below
+}
+
+// Store slide metadata (e.g., whether it's a backdrop)
+let slideMetadata = [];
+
+function addSlideWithMetadata(dataURL, metadata = {}) {
+    slides.push(dataURL);
+    slideMetadata.push(metadata);
+    renderSlideThumbnails();
+    return slides.length - 1;
+}
+
+function isSlideFlagPage(index) {
+    if (index < 0 || index >= slides.length) return false;
+    const meta = slideMetadata[index] || {};
+    // If it's a backdrop, it's not a flag page
+    if (meta.isBackdrop) return false;
+    // Check if the slide data contains the template image or is the medal canvas
+    // We'll check if the data URL is from the medal canvas or the template
+    // The medal canvas is generated and will have the flags, so it's a flag page.
+    // For uploaded images, we check if they look like the template.
+    const dataURL = slides[index];
+    // If it's the medal canvas or the template, it's a flag page.
+    // We can't do pixel-perfect detection, so we use heuristics:
+    // - If it's the medal canvas (generated), it's a flag page
+    // - If it's the template image, it's a flag page
+    // - If it's a backdrop, it's not
+    if (meta.isMedalSlide) return true;
+    if (meta.isTemplateSlide) return true;
+    if (meta.isBackdrop) return false;
+    // For uploaded slides, check if the data URL matches the template image
+    // We can't compare data URLs directly, so we'll use a heuristic: check if it's the template image
+    // by looking at the data URL length or content (not reliable)
+    // Default: if it's not a backdrop, assume it could be a flag page
+    return true; // Assume uploaded slides could be flag pages
+}
+
+function handlePresentClick(index) {
     if (index < 0 || index >= slides.length) return;
     const dataURL = slides[index];
+    const meta = slideMetadata[index] || {};
+
+    // If it's a backdrop, present directly with no music
+    if (meta.isBackdrop) {
+        channel.postMessage({ action: 'navigateSlide', index, dataURL });
+        statusEl.textContent = `📺 Presented backdrop slide ${index+1}`;
+        statusEl.style.opacity = '1';
+        return;
+    }
+
+    // Check if it's a flag page - if not, present directly
+    if (!isSlideFlagPage(index)) {
+        channel.postMessage({ action: 'navigateSlide', index, dataURL });
+        statusEl.textContent = `📺 Presented slide ${index+1}`;
+        statusEl.style.opacity = '1';
+        return;
+    }
+
+    // It's a flag page - show the music prompt
+    pendingPresentIndex = index;
+    pendingPresentDataURL = dataURL;
+
+    // Find the university name from the medal picks if this is a medal slide
+    let uniName = null;
+    let anthemPath = null;
+    if (meta.isMedalSlide) {
+        const goldPick = picks.gold;
+        if (goldPick) {
+            uniName = goldPick.name;
+            anthemPath = goldPick.anthem ? './' + goldPick.anthem : null;
+        }
+    } else {
+        // For template slides, try to find the gold winner from picks
+        const goldPick = picks.gold;
+        if (goldPick) {
+            uniName = goldPick.name;
+            anthemPath = goldPick.anthem ? './' + goldPick.anthem : null;
+        }
+    }
+
+    // Update modal text
+    if (uniName) {
+        modalPromptText.innerHTML = `Select which song to play with this slide. <span class="uni-name-highlight">${uniName}</span> is the champion.`;
+        modalAnthemLabel.textContent = `🎵 Lagu Universiti · ${uniName}`;
+    } else {
+        modalPromptText.textContent = 'Select which song to play with this slide:';
+        modalAnthemLabel.textContent = '🎵 Lagu Universiti (champion\'s anthem)';
+    }
+
+    // Reset radio selection to default (anthem)
+    document.querySelector('input[name="modalSong"][value="anthem"]').checked = true;
+
+    // Show modal
+    modal.classList.add('active');
+}
+
+// Modal confirm
+modalConfirmBtn.addEventListener('click', () => {
+    const selected = document.querySelector('input[name="modalSong"]:checked');
+    if (!selected) return;
+    const choice = selected.value;
+    const index = pendingPresentIndex;
+    const dataURL = pendingPresentDataURL;
+    if (index === null || dataURL === null) return;
+
+    // Send the slide to projector
     channel.postMessage({ action: 'navigateSlide', index, dataURL });
     statusEl.textContent = `📺 Presented slide ${index+1}`;
     statusEl.style.opacity = '1';
-}
+
+    // Handle music selection
+    if (choice === 'anthem') {
+        const goldPick = picks.gold;
+        if (goldPick && goldPick.anthem) {
+            playUniversitySong('./' + goldPick.anthem);
+        } else if (goldPick) {
+            document.getElementById('flagBtn').click();
+        } else {
+            // No gold pick, play LAGU SUKIPT as fallback
+            document.getElementById('flagBtn').click();
+        }
+    } else if (choice === 'sukipt') {
+        if (!isPlaying(FLAG_SONG)) document.getElementById('flagBtn').click();
+    }
+    // choice === 'none' → no music
+
+    modal.classList.remove('active');
+    pendingPresentIndex = null;
+    pendingPresentDataURL = null;
+});
+
+// Modal cancel
+modalCancelBtn.addEventListener('click', () => {
+    modal.classList.remove('active');
+    pendingPresentIndex = null;
+    pendingPresentDataURL = null;
+});
+
+// Close modal on overlay click
+modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+        modal.classList.remove('active');
+        pendingPresentIndex = null;
+        pendingPresentDataURL = null;
+    }
+});
 
 // Present button for the selected slide
 presentSlideBtn.addEventListener('click', () => {
     if (slides.length === 0) return;
-    presentSlide(currentSlideIndex);
+    handlePresentClick(currentSlideIndex);
 });
 
 // Drag & drop for slides
@@ -1338,7 +1545,7 @@ slideUploadZone.addEventListener('drop', e => {
 });
 
 // ============================================================
-// 11. MEDAL SLIDE – (mostly unchanged, with Save Slide added)
+// 11. MEDAL SLIDE
 // ============================================================
 const picks = { sport:null, gold:null, silver:null, bronze:null, bronze2:null };
 const medalBoxes = document.getElementById('medalBoxes');
@@ -1412,15 +1619,12 @@ async function drawMedalSlide() {
     if (picks.sport) Medal.drawSport(ctx, await loadLogo(picks.sport.logo), picks.sport.name);
 }
 
-// Save medal slide as a slide (NEW)
+// Save medal slide as a slide
 document.getElementById('saveMedalSlideBtn').addEventListener('click', async () => {
     await drawMedalSlide();
     try {
         const dataURL = medalCanvas.toDataURL('image/png');
-        slides.push(dataURL);
-        renderSlideThumbnails();
-        // DO NOT auto-select the new slide – keep current selection
-        // Just update the preview to show the new slide? No, we'll keep the current preview.
+        addSlideWithMetadata(dataURL, { isMedalSlide: true });
         statusEl.textContent = '✅ Medal slide saved as slide #' + slides.length;
         statusEl.style.opacity = '1';
         setTimeout(() => { statusEl.style.opacity = '0.5'; }, 3000);
@@ -1430,20 +1634,58 @@ document.getElementById('saveMedalSlideBtn').addEventListener('click', async () 
     }
 });
 
+// Add Backdrop to Slides (NEW)
+document.getElementById('addBackdropSlideBtn').addEventListener('click', async () => {
+    // Load the backdrop image and add it as a slide
+    const backdropImg = new Image();
+    backdropImg.crossOrigin = 'anonymous';
+    backdropImg.src = BACKDROP_IMAGE;
+    await new Promise((resolve, reject) => {
+        backdropImg.onload = resolve;
+        backdropImg.onerror = () => reject('Failed to load backdrop');
+    });
+    // Draw the backdrop on a canvas to get a data URL
+    const canvas = document.createElement('canvas');
+    canvas.width = 1920;
+    canvas.height = 1080;
+    const ctx = canvas.getContext('2d');
+    // Draw backdrop with cover fit
+    const a = backdropImg.width / backdropImg.height;
+    const ca = 1920 / 1080;
+    let sx = 0, sy = 0, sw = backdropImg.width, sh = backdropImg.height;
+    if (a > ca) { sw = backdropImg.height * ca; sx = (backdropImg.width - sw) / 2; } else { sh = backdropImg.width / ca; sy = (backdropImg.height - sh) / 2; }
+    ctx.drawImage(backdropImg, sx, sy, sw, sh, 0, 0, 1920, 1080);
+    // Also draw the hi-res logo on top (like the public page does)
+    if (Medal.logo.complete && Medal.logo.naturalWidth) {
+        const BACKDROP_LOGO_BOX = [123, 197, 849, 366];
+        const [x0, y0, x1, y1] = BACKDROP_LOGO_BOX.map(v => v * 2);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(x0 - 8, y0 - 8, x1 - x0 + 16, y1 - y0 + 16);
+        Medal.drawContained(ctx, Medal.logo, x0, y0, x1, y1, 0);
+    }
+    const dataURL = canvas.toDataURL('image/png');
+    addSlideWithMetadata(dataURL, { isBackdrop: true });
+    statusEl.textContent = '✅ Backdrop added as slide #' + slides.length;
+    statusEl.style.opacity = '1';
+    setTimeout(() => { statusEl.style.opacity = '0.5'; }, 3000);
+});
+
 // Show on projector
 medalShowBtn.addEventListener('click', async () => {
     await drawMedalSlide();
     const logos = {}; for (const m in picks) if (picks[m]) logos[m] = picks[m].logo;
     channel.postMessage({ action: 'medalSlide', logos, tie: tieCheck.checked, sport: picks.sport ? { logo: picks.sport.logo, name: picks.sport.name } : null });
+    // Save as slide with metadata
     try {
-        slides.push(medalCanvas.toDataURL('image/png'));
-        currentSlideIndex = slides.length - 1;
-        renderSlideThumbnails();
-        slidePreviewImg.src = slides[currentSlideIndex];
+        const dataURL = medalCanvas.toDataURL('image/png');
+        const idx = addSlideWithMetadata(dataURL, { isMedalSlide: true });
+        // Auto-select the new slide for preview
+        goToSlide(idx);
     } catch (e) {}
     const song = document.querySelector('input[name=showSong]:checked').value;
     if (song === 'anthem' && picks.gold) medalAnthemBtn.click();
     else if (song === 'sukipt' && !isPlaying(FLAG_SONG)) document.getElementById('flagBtn').click();
+    // if song === 'none' → no music
     statusEl.textContent = '📺 Medal slide shown';
     statusEl.style.opacity = '1';
 });
@@ -1455,9 +1697,8 @@ medalAnthemBtn.addEventListener('click', () => {
     else document.getElementById('flagBtn').click();
 });
 
-// Backdrop – now stops audio (NEW)
+// Backdrop – stops audio
 document.getElementById('backdropBtn').addEventListener('click', () => {
-    // Stop all audio
     if (currentSources.length > 0) {
         fadeOutAll(1.2, () => {
             nowPlayingLabel.textContent = 'Nothing playing';
@@ -1481,7 +1722,7 @@ document.getElementById('medalClearBtn').addEventListener('click', () => {
 });
 
 // ============================================================
-// 12. TAB SWITCHING (updated – removed Slides tab)
+// 12. TAB SWITCHING
 // ============================================================
 const tabs = {
     medal: document.getElementById('tabMedal'),
@@ -1505,7 +1746,7 @@ tabs.main.addEventListener('click', () => switchTab('main'));
 tabs.contingent.addEventListener('click', () => switchTab('contingent'));
 
 // ============================================================
-// 13. KEYBOARD SHORTCUTS (unchanged)
+// 13. KEYBOARD SHORTCUTS
 // ============================================================
 document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, textarea')) return;
@@ -1518,7 +1759,6 @@ document.addEventListener('keydown', (e) => {
     }
     if (e.key === 'ArrowRight' && slides.length) {
         const next = (currentSlideIndex + 1) % slides.length;
-        // preview only, not send
         goToSlide(next);
     }
     if (e.key === 'ArrowLeft' && slides.length) {
