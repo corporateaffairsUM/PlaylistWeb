@@ -257,7 +257,9 @@
             border-radius: 8px; overflow: hidden; cursor: pointer;
             border: 3px solid transparent; transition: 0.2s;
             background: #0f172a; position: relative;
-            display: flex; align-items: center; justify-content: center;
+            display: flex; flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
         .slide-thumb img { width: 100%; display: block; }
         .slide-thumb.active { border-color: #3b82f6; box-shadow: 0 0 20px rgba(59,130,246,0.3); }
@@ -277,8 +279,59 @@
         .slide-thumb-actions .del-btn:hover { background: #cc0000; }
         .slide-thumb-actions .present-btn { background: #0d9488; }
         .slide-thumb-actions .present-btn:hover { background: #0f766e; }
+        .slide-thumb-name {
+            font-size: 0.6rem;
+            color: #94a3b8;
+            text-align: center;
+            padding: 2px 4px;
+            width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            background: rgba(0,0,0,0.5);
+            position: absolute;
+            bottom: 0;
+            left: 0;
+        }
         .empty-slides { color: #475569; font-size: 0.9rem; text-align: center; padding: 30px 0; }
         .slide-count { font-size: 0.85rem; color: #94a3b8; margin-top: 8px; display: block; }
+
+        /* Slide naming input */
+        .slide-name-input {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .slide-name-input label {
+            font-family: 'Oswald', sans-serif;
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--um-blue);
+            letter-spacing: 1px;
+        }
+        .slide-name-input input {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 14px;
+            border: 2px solid #cbd5e1;
+            border-radius: 10px;
+            font: 400 0.95rem 'Oswald', sans-serif;
+            background: #f8fafc;
+            transition: 0.2s;
+        }
+        .slide-name-input input:focus {
+            outline: none;
+            border-color: var(--um-blue);
+            background: #fff;
+        }
+        .slide-name-input .slide-index-label {
+            font-family: 'Oswald', sans-serif;
+            font-weight: 400;
+            font-size: 0.9rem;
+            color: #94a3b8;
+        }
 
         /* EDITOR LAYOUT */
         .editor-layout {
@@ -389,6 +442,7 @@
             .template-wrapper { min-width: 100%; }
             .logo-panel { min-width: 100%; }
             .logo-item { width: 50px; height: 50px; }
+            .slide-name-input input { min-width: 120px; }
         }
         @media (max-width:450px) {
             .btn-grid { gap:8px; }
@@ -402,6 +456,7 @@
             .upload-zone { padding:14px 10px; }
             .upload-zone-text { font-size:0.9rem; }
             .tab-btn { font-size:0.75rem; padding:6px 12px; letter-spacing:0px; }
+            .slide-name-input input { min-width: 80px; font-size: 0.8rem; }
         }
         /* MEDAL SLIDE */
         .medal-boxes { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
@@ -443,7 +498,7 @@
         .btn-backdrop-slide:hover { transform:translateY(-2px); box-shadow:0 6px 0 #0d5e56, var(--shadow-lg); }
         @media (max-width:900px) { .medal-boxes, .medal-boxes.tie { grid-template-columns:1fr 1fr; } }
 
-        /* ===== NEW STYLES FOR PRESENT BUTTON ===== */
+        /* ===== PRESENT BUTTON STYLES ===== */
         .btn-present {
             background: linear-gradient(135deg, #0d9488, #0f766e) !important;
             box-shadow: 0 4px 0 #0d5e56, var(--shadow-sm) !important;
@@ -550,6 +605,14 @@
                 <div class="upload-zone-sub">Drag & drop or click to browse</div>
             </div>
             <span class="slide-count" id="slideCount">0 slides loaded</span>
+
+            <!-- Slide naming input -->
+            <div class="slide-name-input">
+                <label>📝 Slide Name:</label>
+                <input type="text" id="slideNameInput" placeholder="Enter a name for this slide..." />
+                <span class="slide-index-label" id="slideIndexLabel">(Slide #1)</span>
+            </div>
+
             <div class="slide-preview-area" style="margin-top:16px;">
                 <div class="slide-preview-box">
                     <img id="slidePreviewImg" src="" alt="Slide preview" style="max-height:400px;" />
@@ -558,11 +621,10 @@
                     <div class="empty-slides">Upload slides to begin</div>
                 </div>
             </div>
-            <!-- Present selected slide button + Add Backdrop to Slides -->
+            <!-- Present selected slide button -->
             <div style="margin-top:12px; display:flex; gap:12px; flex-wrap:wrap;">
                 <button class="btn btn-present" id="presentSlideBtn">▶ Present this slide</button>
-                <button class="btn btn-backdrop-slide" id="addBackdropSlideBtn">🖼️ Add Backdrop to Slides</button>
-                <span style="font-size:0.85rem; color:#94a3b8; align-self:center;">(Present sends to projector)</span>
+                <span style="font-size:0.85rem; color:#94a3b8; align-self:center;">(Sends the currently selected slide to the projector)</span>
             </div>
         </div>
     </div>
@@ -1212,10 +1274,11 @@ TEAMS.filter(t => t.anthem).forEach(t => {
 });
 
 // ============================================================
-// 10. SLIDES (with music prompt on present)
+// 10. SLIDES (with slide naming + per-slide gold winner storage)
 // ============================================================
 let slides = [];
 let currentSlideIndex = 0;
+let slideMetadata = []; // stores { name, goldWinner, isBackdrop, isMedalSlide, isTemplateSlide }
 
 const slideFileInput = document.getElementById('slideFileInput');
 const slideUploadZone = document.getElementById('slideUploadZone');
@@ -1223,6 +1286,8 @@ const slideCount = document.getElementById('slideCount');
 const slidePreviewImg = document.getElementById('slidePreviewImg');
 const slideThumbList = document.getElementById('slideThumbList');
 const presentSlideBtn = document.getElementById('presentSlideBtn');
+const slideNameInput = document.getElementById('slideNameInput');
+const slideIndexLabel = document.getElementById('slideIndexLabel');
 
 // Modal elements
 const modal = document.getElementById('musicPromptModal');
@@ -1243,166 +1308,63 @@ script.onload = () => {
     window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 };
 
-slideFileInput.addEventListener('change', async (e) => {
-    const files = Array.from(e.target.files);
-    if (!files.length) return;
-    for (const file of files) {
-        if (file.type === 'application/pdf') {
-            await handlePDF(file);
-        } else if (file.type.startsWith('image/')) {
-            await handleImage(file);
-        }
-    }
-    slideFileInput.value = '';
-    renderSlideThumbnails();
-    if (slides.length) {
-        goToSlide(0);
+// --- Slide Naming ---
+slideNameInput.addEventListener('input', () => {
+    if (currentSlideIndex >= 0 && currentSlideIndex < slides.length) {
+        slideMetadata[currentSlideIndex].name = slideNameInput.value.trim() || '';
+        renderSlideThumbnails();
     }
 });
 
-function handleImage(file) {
-    return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            slides.push(e.target.result);
-            resolve();
-        };
-        reader.readAsDataURL(file);
-    });
-}
-
-async function handlePDF(file) {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 1.5 });
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        await page.render({ canvasContext: ctx, viewport }).promise;
-        slides.push(canvas.toDataURL('image/png'));
+slideNameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        slideNameInput.blur();
     }
-}
+});
 
-function renderSlideThumbnails() {
-    slideCount.textContent = `${slides.length} slides loaded`;
-    if (!slides.length) {
-        slideThumbList.innerHTML = '<div class="empty-slides">Upload slides to begin</div>';
-        slidePreviewImg.src = '';
-        presentSlideBtn.disabled = true;
-        return;
-    }
-    let html = '';
-    slides.forEach((dataURL, idx) => {
-        const active = idx === currentSlideIndex ? 'active' : '';
-        html += `
-            <div class="slide-thumb ${active}" data-index="${idx}">
-                <img src="${dataURL}" alt="Slide ${idx+1}" />
-                <div class="slide-thumb-actions">
-                    ${idx > 0 ? `<button class="move-up" data-index="${idx}">⬆️</button>` : ''}
-                    ${idx < slides.length - 1 ? `<button class="move-down" data-index="${idx}">⬇️</button>` : ''}
-                    <button class="present-btn" data-index="${idx}" title="Present this slide">▶</button>
-                    <button class="del-btn" data-index="${idx}">🗑️</button>
-                </div>
-            </div>
-        `;
-    });
-    slideThumbList.innerHTML = html;
-
-    document.querySelectorAll('.slide-thumb').forEach(el => {
-        const idx = parseInt(el.dataset.index);
-        el.addEventListener('click', (e) => {
-            if (e.target.closest('.slide-thumb-actions')) return;
-            goToSlide(idx);
-        });
-    });
-
-    document.querySelectorAll('.move-up').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const idx = parseInt(btn.dataset.index);
-            if (idx > 0) {
-                [slides[idx], slides[idx-1]] = [slides[idx-1], slides[idx]];
-                renderSlideThumbnails();
-                if (currentSlideIndex === idx) currentSlideIndex = idx-1;
-                else if (currentSlideIndex === idx-1) currentSlideIndex = idx;
-                goToSlide(currentSlideIndex);
-            }
-        });
-    });
-
-    document.querySelectorAll('.move-down').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const idx = parseInt(btn.dataset.index);
-            if (idx < slides.length - 1) {
-                [slides[idx], slides[idx+1]] = [slides[idx+1], slides[idx]];
-                renderSlideThumbnails();
-                if (currentSlideIndex === idx) currentSlideIndex = idx+1;
-                else if (currentSlideIndex === idx+1) currentSlideIndex = idx;
-                goToSlide(currentSlideIndex);
-            }
-        });
-    });
-
-    document.querySelectorAll('.present-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const idx = parseInt(btn.dataset.index);
-            handlePresentClick(idx);
-        });
-    });
-
-    document.querySelectorAll('.del-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const idx = parseInt(btn.dataset.index);
-            slides.splice(idx, 1);
-            if (currentSlideIndex >= slides.length) currentSlideIndex = Math.max(0, slides.length - 1);
-            renderSlideThumbnails();
-            if (slides.length) {
-                goToSlide(currentSlideIndex);
-            } else {
-                slidePreviewImg.src = '';
-                presentSlideBtn.disabled = true;
-            }
-        });
-    });
-
-    presentSlideBtn.disabled = false;
-}
-
-function goToSlide(index) {
-    if (index < 0 || index >= slides.length) return;
-    currentSlideIndex = index;
-    const dataURL = slides[index];
-    slidePreviewImg.src = dataURL;
-    document.querySelectorAll('.slide-thumb').forEach((el, i) => {
-        el.classList.toggle('active', i === index);
-    });
-}
-
-// ===== STORE SLIDE METADATA =====
-let slideMetadata = [];
-
+// --- Add slide with metadata ---
 function addSlideWithMetadata(dataURL, metadata = {}) {
+    const idx = slides.length;
     slides.push(dataURL);
-    slideMetadata.push(metadata);
+    slideMetadata.push({
+        name: metadata.name || '',
+        goldWinner: metadata.goldWinner || null, // { name, anthemPath, hasAnthem }
+        isBackdrop: metadata.isBackdrop || false,
+        isMedalSlide: metadata.isMedalSlide || false,
+        isTemplateSlide: metadata.isTemplateSlide || false,
+    });
     renderSlideThumbnails();
-    return slides.length - 1;
+    return idx;
 }
 
+// --- Get current gold winner from the global picks ---
+function getCurrentGoldWinner() {
+    const gold = picks.gold;
+    if (!gold) return null;
+    return {
+        name: gold.name,
+        anthemPath: gold.anthem ? './' + gold.anthem : null,
+        hasAnthem: !!gold.anthem
+    };
+}
+
+// --- Check if a slide has a gold winner ---
+function getSlideGoldWinner(index) {
+    if (index < 0 || index >= slides.length) return null;
+    return slideMetadata[index]?.goldWinner || null;
+}
+
+// --- Check if slide is a flag page ---
 function isSlideFlagPage(index) {
     if (index < 0 || index >= slides.length) return false;
     const meta = slideMetadata[index] || {};
     if (meta.isBackdrop) return false;
     if (meta.isMedalSlide) return true;
     if (meta.isTemplateSlide) return true;
-    return true; // Assume uploaded slides could be flag pages
+    return true; // uploaded slides could be flag pages
 }
 
+// --- Handle present click ---
 function handlePresentClick(index) {
     if (index < 0 || index >= slides.length) return;
     const dataURL = slides[index];
@@ -1428,15 +1390,21 @@ function handlePresentClick(index) {
     pendingPresentIndex = index;
     pendingPresentDataURL = dataURL;
 
-    // Find the university name and anthem from the medal picks
+    // Get the gold winner stored with this slide (if any)
+    const goldWinner = getSlideGoldWinner(index);
     let uniName = null;
     let hasAnthem = false;
-    let anthemPath = null;
-    const goldPick = picks.gold;
-    if (goldPick) {
-        uniName = goldPick.name;
-        hasAnthem = !!goldPick.anthem;
-        anthemPath = goldPick.anthem ? './' + goldPick.anthem : null;
+
+    if (goldWinner) {
+        uniName = goldWinner.name;
+        hasAnthem = goldWinner.hasAnthem;
+    } else {
+        // Fallback: check current gold pick (for backwards compatibility)
+        const currentGold = picks.gold;
+        if (currentGold) {
+            uniName = currentGold.name;
+            hasAnthem = !!currentGold.anthem;
+        }
     }
 
     // Update modal text
@@ -1447,19 +1415,15 @@ function handlePresentClick(index) {
         document.querySelector('input[name="modalSong"][value="anthem"]').checked = true;
     } else if (uniName && !hasAnthem) {
         modalPromptText.innerHTML = `Select which song to play with this slide. <span class="uni-name-highlight">${uniName}</span> is the champion, but has no anthem file.`;
-        // Hide the anthem option since there's no file
         modalAnthemOption.classList.add('hidden-option');
-        // Select LAGU SUKIPT or No Music by default
         document.querySelector('input[name="modalSong"][value="sukipt"]').checked = true;
     } else {
         modalPromptText.textContent = 'Select which song to play with this slide:';
         modalAnthemLabel.textContent = '🎵 Lagu Universiti (champion\'s anthem)';
-        // If no gold pick, we don't know the champion, so hide the anthem option
         modalAnthemOption.classList.add('hidden-option');
         document.querySelector('input[name="modalSong"][value="sukipt"]').checked = true;
     }
 
-    // Show modal
     modal.classList.add('active');
 }
 
@@ -1477,13 +1441,22 @@ modalConfirmBtn.addEventListener('click', () => {
     statusEl.textContent = `📺 Presented slide ${index+1}`;
     statusEl.style.opacity = '1';
 
-    // Handle music selection
+    // Handle music selection - use the slide's stored gold winner
+    const goldWinner = getSlideGoldWinner(index);
+    let anthemPath = null;
+    if (goldWinner) {
+        anthemPath = goldWinner.anthemPath;
+    } else {
+        // Fallback to current gold pick
+        const currentGold = picks.gold;
+        if (currentGold && currentGold.anthem) {
+            anthemPath = './' + currentGold.anthem;
+        }
+    }
+
     if (choice === 'anthem') {
-        const goldPick = picks.gold;
-        if (goldPick && goldPick.anthem) {
-            playUniversitySong('./' + goldPick.anthem);
-        } else if (goldPick) {
-            document.getElementById('flagBtn').click();
+        if (anthemPath) {
+            playUniversitySong(anthemPath);
         } else {
             document.getElementById('flagBtn').click();
         }
@@ -1513,42 +1486,189 @@ modal.addEventListener('click', (e) => {
     }
 });
 
+// --- Slide upload handlers ---
+slideFileInput.addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    for (const file of files) {
+        if (file.type === 'application/pdf') {
+            await handlePDF(file);
+        } else if (file.type.startsWith('image/')) {
+            await handleImage(file);
+        }
+    }
+    slideFileInput.value = '';
+    renderSlideThumbnails();
+    if (slides.length) {
+        goToSlide(0);
+    }
+});
+
+function handleImage(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            // Uploaded slides don't have a gold winner by default
+            const idx = slides.length;
+            slides.push(e.target.result);
+            slideMetadata.push({
+                name: '',
+                goldWinner: null,
+                isBackdrop: false,
+                isMedalSlide: false,
+                isTemplateSlide: false,
+            });
+            resolve();
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+async function handlePDF(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const idx = slides.length;
+        slides.push(canvas.toDataURL('image/png'));
+        slideMetadata.push({
+            name: '',
+            goldWinner: null,
+            isBackdrop: false,
+            isMedalSlide: false,
+            isTemplateSlide: false,
+        });
+    }
+}
+
+function renderSlideThumbnails() {
+    slideCount.textContent = `${slides.length} slides loaded`;
+    if (!slides.length) {
+        slideThumbList.innerHTML = '<div class="empty-slides">Upload slides to begin</div>';
+        slidePreviewImg.src = '';
+        presentSlideBtn.disabled = true;
+        slideNameInput.value = '';
+        slideIndexLabel.textContent = '(No slides)';
+        return;
+    }
+    let html = '';
+    slides.forEach((dataURL, idx) => {
+        const active = idx === currentSlideIndex ? 'active' : '';
+        const meta = slideMetadata[idx] || {};
+        const displayName = meta.name || `Slide ${idx+1}`;
+        html += `
+            <div class="slide-thumb ${active}" data-index="${idx}">
+                <img src="${dataURL}" alt="Slide ${idx+1}" />
+                <span class="slide-thumb-name">${displayName}</span>
+                <div class="slide-thumb-actions">
+                    ${idx > 0 ? `<button class="move-up" data-index="${idx}">⬆️</button>` : ''}
+                    ${idx < slides.length - 1 ? `<button class="move-down" data-index="${idx}">⬇️</button>` : ''}
+                    <button class="present-btn" data-index="${idx}" title="Present this slide">▶</button>
+                    <button class="del-btn" data-index="${idx}">🗑️</button>
+                </div>
+            </div>
+        `;
+    });
+    slideThumbList.innerHTML = html;
+
+    document.querySelectorAll('.slide-thumb').forEach(el => {
+        const idx = parseInt(el.dataset.index);
+        el.addEventListener('click', (e) => {
+            if (e.target.closest('.slide-thumb-actions')) return;
+            goToSlide(idx);
+        });
+    });
+
+    document.querySelectorAll('.move-up').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = parseInt(btn.dataset.index);
+            if (idx > 0) {
+                [slides[idx], slides[idx-1]] = [slides[idx-1], slides[idx]];
+                [slideMetadata[idx], slideMetadata[idx-1]] = [slideMetadata[idx-1], slideMetadata[idx]];
+                renderSlideThumbnails();
+                if (currentSlideIndex === idx) currentSlideIndex = idx-1;
+                else if (currentSlideIndex === idx-1) currentSlideIndex = idx;
+                goToSlide(currentSlideIndex);
+            }
+        });
+    });
+
+    document.querySelectorAll('.move-down').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = parseInt(btn.dataset.index);
+            if (idx < slides.length - 1) {
+                [slides[idx], slides[idx+1]] = [slides[idx+1], slides[idx]];
+                [slideMetadata[idx], slideMetadata[idx+1]] = [slideMetadata[idx+1], slideMetadata[idx]];
+                renderSlideThumbnails();
+                if (currentSlideIndex === idx) currentSlideIndex = idx+1;
+                else if (currentSlideIndex === idx+1) currentSlideIndex = idx;
+                goToSlide(currentSlideIndex);
+            }
+        });
+    });
+
+    document.querySelectorAll('.present-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = parseInt(btn.dataset.index);
+            handlePresentClick(idx);
+        });
+    });
+
+    document.querySelectorAll('.del-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = parseInt(btn.dataset.index);
+            slides.splice(idx, 1);
+            slideMetadata.splice(idx, 1);
+            if (currentSlideIndex >= slides.length) currentSlideIndex = Math.max(0, slides.length - 1);
+            renderSlideThumbnails();
+            if (slides.length) {
+                goToSlide(currentSlideIndex);
+            } else {
+                slidePreviewImg.src = '';
+                presentSlideBtn.disabled = true;
+                slideNameInput.value = '';
+                slideIndexLabel.textContent = '(No slides)';
+            }
+        });
+    });
+
+    presentSlideBtn.disabled = false;
+    // Update name input for current slide
+    if (currentSlideIndex >= 0 && currentSlideIndex < slides.length) {
+        const meta = slideMetadata[currentSlideIndex] || {};
+        slideNameInput.value = meta.name || '';
+        slideIndexLabel.textContent = `(Slide #${currentSlideIndex+1} of ${slides.length})`;
+    }
+}
+
+function goToSlide(index) {
+    if (index < 0 || index >= slides.length) return;
+    currentSlideIndex = index;
+    const dataURL = slides[index];
+    slidePreviewImg.src = dataURL;
+    document.querySelectorAll('.slide-thumb').forEach((el, i) => {
+        el.classList.toggle('active', i === index);
+    });
+    // Update name input
+    const meta = slideMetadata[index] || {};
+    slideNameInput.value = meta.name || '';
+    slideIndexLabel.textContent = `(Slide #${index+1} of ${slides.length})`;
+}
+
 // Present button for the selected slide
 presentSlideBtn.addEventListener('click', () => {
     if (slides.length === 0) return;
     handlePresentClick(currentSlideIndex);
-});
-
-// ===== ADD BACKDROP TO SLIDES (moved to Slide Manager) =====
-document.getElementById('addBackdropSlideBtn').addEventListener('click', async () => {
-    const backdropImg = new Image();
-    backdropImg.crossOrigin = 'anonymous';
-    backdropImg.src = BACKDROP_IMAGE;
-    await new Promise((resolve, reject) => {
-        backdropImg.onload = resolve;
-        backdropImg.onerror = () => reject('Failed to load backdrop');
-    });
-    const canvas = document.createElement('canvas');
-    canvas.width = 1920;
-    canvas.height = 1080;
-    const ctx = canvas.getContext('2d');
-    const a = backdropImg.width / backdropImg.height;
-    const ca = 1920 / 1080;
-    let sx = 0, sy = 0, sw = backdropImg.width, sh = backdropImg.height;
-    if (a > ca) { sw = backdropImg.height * ca; sx = (backdropImg.width - sw) / 2; } else { sh = backdropImg.width / ca; sy = (backdropImg.height - sh) / 2; }
-    ctx.drawImage(backdropImg, sx, sy, sw, sh, 0, 0, 1920, 1080);
-    if (Medal.logo.complete && Medal.logo.naturalWidth) {
-        const BACKDROP_LOGO_BOX = [123, 197, 849, 366];
-        const [x0, y0, x1, y1] = BACKDROP_LOGO_BOX.map(v => v * 2);
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(x0 - 8, y0 - 8, x1 - x0 + 16, y1 - y0 + 16);
-        Medal.drawContained(ctx, Medal.logo, x0, y0, x1, y1, 0);
-    }
-    const dataURL = canvas.toDataURL('image/png');
-    addSlideWithMetadata(dataURL, { isBackdrop: true });
-    statusEl.textContent = '✅ Backdrop added as slide #' + slides.length;
-    statusEl.style.opacity = '1';
-    setTimeout(() => { statusEl.style.opacity = '0.5'; }, 3000);
 });
 
 // Drag & drop for slides
@@ -1638,12 +1758,20 @@ async function drawMedalSlide() {
     if (picks.sport) Medal.drawSport(ctx, await loadLogo(picks.sport.logo), picks.sport.name);
 }
 
-// Save medal slide as a slide
+// Save medal slide as a slide - stores gold winner info
 document.getElementById('saveMedalSlideBtn').addEventListener('click', async () => {
     await drawMedalSlide();
     try {
         const dataURL = medalCanvas.toDataURL('image/png');
-        addSlideWithMetadata(dataURL, { isMedalSlide: true });
+        const goldWinner = getCurrentGoldWinner();
+        addSlideWithMetadata(dataURL, {
+            isMedalSlide: true,
+            goldWinner: goldWinner,
+            name: goldWinner ? `🏅 ${goldWinner.name}` : '🏅 Medal Slide'
+        });
+        // Auto-select the new slide
+        const idx = slides.length - 1;
+        goToSlide(idx);
         statusEl.textContent = '✅ Medal slide saved as slide #' + slides.length;
         statusEl.style.opacity = '1';
         setTimeout(() => { statusEl.style.opacity = '0.5'; }, 3000);
@@ -1658,9 +1786,15 @@ medalShowBtn.addEventListener('click', async () => {
     await drawMedalSlide();
     const logos = {}; for (const m in picks) if (picks[m]) logos[m] = picks[m].logo;
     channel.postMessage({ action: 'medalSlide', logos, tie: tieCheck.checked, sport: picks.sport ? { logo: picks.sport.logo, name: picks.sport.name } : null });
+    // Save as slide with gold winner info
     try {
         const dataURL = medalCanvas.toDataURL('image/png');
-        const idx = addSlideWithMetadata(dataURL, { isMedalSlide: true });
+        const goldWinner = getCurrentGoldWinner();
+        const idx = addSlideWithMetadata(dataURL, {
+            isMedalSlide: true,
+            goldWinner: goldWinner,
+            name: goldWinner ? `🏅 ${goldWinner.name}` : '🏅 Medal Slide'
+        });
         goToSlide(idx);
     } catch (e) {}
     const song = document.querySelector('input[name=showSong]:checked').value;
