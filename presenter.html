@@ -1446,16 +1446,31 @@ tieCheck.addEventListener('change', () => {
 
 // Render one ceremony's picks onto any canvas — the editor preview, or the queue's
 // offscreen canvas (so playing a queued ceremony doesn't wipe the slide being built).
+// Drawing awaits each logo, so several redraws in quick succession (clearing four
+// medal boxes, say) overlap: an older one would resume after a newer one has cleared
+// the canvas and paint its stale logos back on. Each canvas therefore records the
+// newest draw, and a superseded draw bails out instead of painting.
+const medalDrawSeq = new WeakMap();
+let medalDrawNext = 0;
 async function renderMedal(ctx, p, tie) {
     if (!templateImg.complete || !templateImg.naturalWidth) return false;
+    const seq = ++medalDrawNext;
+    medalDrawSeq.set(ctx.canvas, seq);
+    const superseded = () => medalDrawSeq.get(ctx.canvas) !== seq;
     ctx.clearRect(0, 0, 1920, 1080);
     const rects = Medal.drawBase(ctx, templateImg, tie);
     for (const m in rects) {
         const t = p[m]; if (!t) continue;
-        const img = await loadLogo(t.logo); if (!img) continue;
+        const img = await loadLogo(t.logo);
+        if (superseded()) return false;
+        if (!img) continue;
         Medal.drawContained(ctx, img, ...rects[m], 0.12);
     }
-    if (p.sport) Medal.drawSport(ctx, await loadLogo(p.sport.logo), p.sport.name);
+    if (p.sport) {
+        const img = await loadLogo(p.sport.logo);
+        if (superseded()) return false;
+        Medal.drawSport(ctx, img, p.sport.name);
+    }
     return true;
 }
 async function drawMedalSlide() {
